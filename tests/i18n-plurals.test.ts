@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { LANGUAGES } from "../src/lib/i18n/languages.ts";
 import { pluralForm } from "../src/lib/i18n/translate.ts";
 import arQueue from "../src/lib/i18n/locales/ar/queue-basket.ts";
 import plQueue from "../src/lib/i18n/locales/pl/queue-basket.ts";
@@ -145,4 +146,16 @@ test("the ru catalog ships variants and they actually differ", async () => {
     .find((base) => ru[`${base}#one`] && ru[`${base}#few`] && ru[`${base}#one`] !== ru[base]);
   assert.ok(sample, "no key has a distinct one/few/many set");
   assert.notEqual(ru[`${sample}#one`], ru[sample], "one and many should differ");
+});
+
+test("the number of sources is never shown with the mark of its plural form", async () => {
+  const marked: string[] = [];
+  for (const { code } of LANGUAGES) {
+    const { default: catalog } = await import(`../src/lib/i18n/locales/${code}.ts`);
+    for (const [key, value] of Object.entries<string>(catalog)) {
+      const counted = /^\{n\} sources?$/.test(key.replace(VARIANT_SUFFIX, ""));
+      if (counted && VARIANT_SUFFIX.test(value)) marked.push(`${code}: ${key}: ${value}`);
+    }
+  }
+  assert.deepEqual(marked, []);
 });
