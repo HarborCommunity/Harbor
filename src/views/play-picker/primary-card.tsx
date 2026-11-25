@@ -1,6 +1,5 @@
 import { PlayedLastBadge } from "./played-last-badge";
-import { Check, Download, ExternalLink, Loader2, Zap } from "lucide-react";
-import { Play } from "@/components/icons/play-filled";
+import { Check, Download, Zap } from "lucide-react";
 import { Flag } from "@/components/flag";
 import { DubSubPill, streamDubSub } from "@/components/dub-sub-pill";
 import { CopyLinkButton, resolveStreamLink } from "@/components/player/copy-link-button";
@@ -11,17 +10,16 @@ import { useT } from "@/lib/i18n";
 import { useDebridClients } from "@/lib/debrid/registry";
 import { useSettings } from "@/lib/settings";
 import type { ScoredStream } from "@/lib/streams/types";
-import { directStreamAvailable } from "@/lib/torrent/stremio-stream";
 import type { PlayEpisode } from "@/lib/view";
 import { EditionChip } from "./edition-chip";
 import {
   anyStreamCached,
   confirmationLabel,
   displayTitle,
-  hasUncachedMarker,
   streamSummaryParts,
   torrentFilename,
 } from "./picker-utils";
+import { PickActionButton, pickAction } from "./pick-action-button";
 import { PlayProvenance } from "./play-provenance";
 
 export function PrimaryCard({
@@ -60,16 +58,10 @@ export function PrimaryCard({
   const cachedDebrids = debrids.filter((d) => stream.cached[d.slug]);
   const libraryDebrids = debrids.filter((d) => stream.inLibrary[d.slug]);
   const cachedDebrid = cachedDebrids[0] ?? null;
-  const externalOnly = !stream.url && !stream.infoHash && !!stream.externalUrl;
   const link = resolveStreamLink(stream);
   const addonCached = anyStreamCached(stream);
-  const isCached =
-    (stream.url != null && !stream.infoHash && !hasUncachedMarker(stream)) ||
-    cachedDebrid != null ||
-    addonCached ||
-    isPreviouslyPlayed;
-  const queueTarget = debrids.find((d) => d.queueCache);
-  const canStream = !isCached && directStreamAvailable(stream);
+  const action = pickAction(stream, debrids, isPreviouslyPlayed);
+  const { queueTarget } = action;
   const summary = streamSummaryParts(stream).map((part) =>
     stream.seeders != null && part === `${stream.seeders} seeds`
       ? t("{n} seeds", { n: stream.seeders })
@@ -261,85 +253,18 @@ export function PrimaryCard({
           </div>
 
           <div className="flex flex-wrap items-center gap-5">
-            {externalOnly ? (
-              <button
-                onClick={onPlay}
-                className="group flex h-14 items-center gap-3 rounded-full border border-ink/30 bg-ink/[0.04] px-7 text-[14.5px] font-semibold tracking-[0.04em] text-ink transition-[transform,background-color,opacity] duration-200 hover:scale-[1.02] hover:bg-ink/[0.08] active:scale-[0.98]"
-              >
-                <ExternalLink size={18} strokeWidth={2.2} />
-                {t("Open in browser")}
-              </button>
-            ) : isCached ? (
-              <button
-                onClick={onPlay}
-                disabled={resolving}
-                className="group flex h-14 items-center gap-3 rounded-full bg-ink px-9 text-[15px] font-semibold tracking-[0.04em] text-canvas shadow-[0_12px_36px_rgba(0,0,0,0.45)] transition-[transform,opacity] duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
-              >
-                {resolving ? (
-                  <Loader2 size={20} className="animate-spin" />
-                ) : (
-                  <Play
-                    size={20}
-                    fill="currentColor"
-                    strokeWidth={0}
-                    className="transition-transform group-hover:translate-x-0.5"
-                  />
-                )}
-                {resolving ? t("Connecting") : inSession ? t("Play Together") : t("Play")}
-              </button>
-            ) : queued ? (
-              <button
-                disabled
-                className="flex h-14 items-center gap-3 rounded-full bg-emerald-400/15 px-7 text-[14px] font-semibold tracking-[0.04em] text-emerald-300 ring-1 ring-emerald-400/40"
-              >
-                <Check size={18} strokeWidth={2.5} />
-                {t("Queued on {provider}", { provider: queueTarget?.name ?? t("debrid") })}
-              </button>
-            ) : queueTarget ? (
-              <button
-                onClick={onCache}
-                disabled={resolving}
-                className="group flex h-14 items-center gap-3 rounded-full border border-accent/55 bg-accent/12 px-7 text-[14.5px] font-semibold tracking-[0.04em] text-accent transition-[transform,background-color,opacity] duration-200 hover:scale-[1.02] hover:bg-accent/20 active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
-              >
-                {resolving ? (
-                  <Loader2 size={18} className="animate-spin" />
-                ) : (
-                  <Download size={18} strokeWidth={2.4} />
-                )}
-                {resolving
-                  ? t("Sending to {provider}", { provider: queueTarget.name })
-                  : t("Cache on {provider}", { provider: queueTarget.name })}
-              </button>
-            ) : canStream ? (
-              <button
-                onClick={onPlay}
-                disabled={resolving}
-                className="group flex h-14 items-center gap-3 rounded-full bg-ink px-9 text-[15px] font-semibold tracking-[0.04em] text-canvas shadow-[0_12px_36px_rgba(0,0,0,0.45)] transition-[transform,opacity] duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:cursor-wait disabled:opacity-60"
-              >
-                {resolving ? (
-                  <Loader2 size={20} className="animate-spin" />
-                ) : (
-                  <Play
-                    size={20}
-                    fill="currentColor"
-                    strokeWidth={0}
-                    className="transition-transform group-hover:translate-x-0.5"
-                  />
-                )}
-                {resolving ? t("Connecting") : inSession ? t("Stream Together") : t("Stream")}
-              </button>
-            ) : (
-              <button
-                disabled
-                className="flex h-14 items-center gap-3 rounded-full bg-canvas/60 px-7 text-[14px] font-semibold tracking-[0.04em] text-ink-subtle ring-1 ring-edge-soft"
-              >
-                {t("Not cached")}
-              </button>
-            )}
+            <PickActionButton
+              action={action}
+              onPlay={onPlay}
+              onCache={onCache}
+              resolving={resolving}
+              queued={queued}
+              inSession={inSession}
+            />
             <PlayProvenance
               stream={stream}
               debrids={debrids}
-              isCached={isCached}
+              isCached={action.isCached}
               addonLogo={addonLogo}
             />
             {link && (
