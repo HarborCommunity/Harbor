@@ -196,6 +196,8 @@ test("that nothing is cached is told to the modern look alone", () => {
     "else noneCached = modern && all.length > 0;",
     "else fellBack = !noneCached;",
     "return { primary, byTier, all, allRaw, ranked, fellBack, noneCached };",
+    "!filteredPicker?.noneCached;",
+    "!filteredPicker?.noneCached &&",
     "noneCached: filteredPicker?.noneCached ?? false,",
     "!filteredPicker?.noneCached && (",
     "noneCached={filteredPicker.noneCached}",

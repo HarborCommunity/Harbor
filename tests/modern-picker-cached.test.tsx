@@ -11,6 +11,7 @@ import { LAYOUTS, RESULTS, aggregatorAnswer } from "./helpers/aggregator-results
 import { act, pointer, renderModern, source, type LookProps } from "./helpers/modern-picker.tsx";
 
 const { StreamModeToggle } = await import("@/components/stream-mode-toggle");
+const { findRememberedSourceMatch } = await import("@/lib/playback-history");
 const { hasCachedMarker, hasUncachedMarker } = await import("@/lib/streams/cached");
 const { matchesCustomFilter } = await import("@/lib/streams/custom-filters");
 const { filterStreamsByMode } = await import("@/lib/streams/mode");
@@ -32,7 +33,7 @@ const pageSource = ts.createSourceFile(
 );
 const pageCode = new Map<string, string>();
 
-/** What the page itself hands to the hook behind a name. */
+/** What the page itself hands to the hook behind a name, or what it reckons the name to be. */
 function codeOf(name: string): string {
   const known = pageCode.get(name);
   if (known) return known;
@@ -41,10 +42,11 @@ function codeOf(name: string): string {
     if (
       ts.isVariableDeclaration(node) &&
       node.name.getText(pageSource) === name &&
-      node.initializer &&
-      ts.isCallExpression(node.initializer)
+      node.initializer
     ) {
-      code = node.initializer.arguments[0].getText(pageSource);
+      const { initializer } = node;
+      const own = ts.isCallExpression(initializer) ? initializer.arguments[0] : initializer;
+      code = own.getText(pageSource);
     }
     ts.forEachChild(node, visit);
   };
@@ -117,6 +119,43 @@ function pageList(sent: ScoredStream[], asked: Partial<Asked> = {}): PageList {
     hostMatch: null,
   };
   return (runPage("filteredPicker", scope) as () => PageList)();
+}
+
+const LOOKS = ["modern", "stremio", "condensed"] as const;
+
+/** What the page starts by itself, opened to resume what was played last or asked by a room's host. */
+function byItself(sent: ScoredStream[], asked: Partial<Asked>, last: ScoredStream) {
+  const scope = {
+    filteredPicker: pageList(sent, asked),
+    previousPlayback: { ...last, savedAt: 1 },
+    findRememberedSourceMatch,
+    isCached: isCachedOnPage(asked.debrids ?? ASKED.debrids),
+    continuation: undefined,
+    episode: undefined,
+    isAnimeMetaId: false,
+    inviteKey: "tt0000001||",
+    isLiveLikeContent: false,
+    isDownload: false,
+    roomGuestPick: false,
+    inSession: false,
+    attempt: undefined,
+    autoPlay: false,
+    autoCancelled: false,
+    autoExhausted: false,
+    rememberedAddonPending: false,
+    p2pAutoConsent: true,
+    resume: true,
+    wasInvitedTo: () => false,
+  };
+  const previousMatch = (runPage("previousMatch", scope) as () => ScoredStream | null)();
+  const found = { ...scope, previousMatch };
+  const rememberedInstant = runPage("rememberedInstant", found);
+  return {
+    resumed: runPage("rememberedHandledFirst", { ...found, rememberedInstant })
+      ? previousMatch!.releaseGroup
+      : null,
+    asked: runPage("autoActive", { ...found, wasInvitedTo: () => true }),
+  };
 }
 
 // --- the look in it -----------------------------------------------------------------------------
@@ -390,10 +429,47 @@ test("while add-ons still answer the empty list is the same, and something cache
 });
 
 test("with no source at all there is nothing that the switch hides", () => {
-  for (const look of ["modern", "stremio", "condensed"] as const) {
+  for (const look of LOOKS) {
     for (const streamMode of MODES) {
       const { all, noneCached } = pageList([], { look, streamMode, cachedOnly: true });
       assert.deepEqual([all, !noneCached], [[], true], "so the page says what it found");
+    }
+  }
+});
+
+/** What was played last, from an add-on of its own. */
+const LAST = { addonId: "made.up.last", infoHash: "f".repeat(40) };
+const lastLink = (name: string) => link("GOLF", { ...LAST, infoHash: undefined, name });
+
+test("nothing starts by itself while Cached only hides every source", () => {
+  for (const last of [lastLink("⏳ Made-up"), torrent("GOLF", LAST)]) {
+    const sent = [...torrents(), last];
+    for (const look of LOOKS) {
+      for (const streamMode of MODES) {
+        const listed = pageList(sent, { look, streamMode }).all.includes(last);
+        for (const on of [false, true]) {
+          const here = `${look}, ${streamMode}, ${last.url ?? "a torrent"}, ${on}`;
+          const hidden = on && look === "modern";
+          const starts = byItself(sent, { look, streamMode, cachedOnly: on }, last);
+          assert.equal(starts.resumed, listed && !hidden ? "GOLF" : null, here);
+          assert.equal(starts.asked, !hidden, here);
+        }
+      }
+    }
+  }
+});
+
+test("where something is cached only that starts by itself, in every look as before", () => {
+  for (const [sign, resumed] of [
+    ["⚡", "GOLF"],
+    ["⏳", null],
+  ]) {
+    const last = lastLink(`${sign} Made-up`);
+    const sent = [...six(), last];
+    for (const look of LOOKS) {
+      const on = { look, cachedOnly: true };
+      assert.deepEqual(byItself(sent, on, last), { resumed, asked: true }, look);
+      assert.deepEqual(byItself(sent, { look }, last), { resumed: "GOLF", asked: true }, look);
     }
   }
 });

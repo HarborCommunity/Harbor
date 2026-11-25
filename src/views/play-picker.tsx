@@ -414,8 +414,8 @@ export function PlayPicker({
       const langFiltered = all.filter((s) => streamMatchesLangs(s, preferredLangs));
       if (langFiltered.length > 0) all = langFiltered;
     }
-    // With nothing cached the other looks show everything; the modern one shows none of it, so that
-    // its switch keeps its word.
+    // With nothing cached the other looks show everything; the modern one shows none of it and starts
+    // none of it by itself, so that its switch keeps its word.
     let noneCached = false;
     if (cachedOnly && (modern || debrids.length > 0)) {
       const cached = all.filter(modern ? startsAtOnce : isCached);
@@ -590,7 +590,8 @@ export function PlayPicker({
     !autoCancelled &&
     !autoExhausted &&
     !isDownload &&
-    !roomGuestPick;
+    !roomGuestPick &&
+    !filteredPicker?.noneCached;
   useEffect(() => {
     if (!autoActive) return;
     if (preferredSourceAddonPending(preferredSourceEntry, false, pipelineDone, addonQuorum)) return;
@@ -844,6 +845,7 @@ export function PlayPicker({
     !roomGuestPick &&
     !inSession &&
     !rememberedAddonPending &&
+    !filteredPicker?.noneCached &&
     rememberedInstant &&
     (attempt ?? 0) === 0;
   useEffect(() => {
