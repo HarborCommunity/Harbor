@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { PickerLayoutPreview } from "./picker-layout-preview";
+import { bidiIsolate } from "@/lib/bidi";
 import { useSettings, type Settings } from "@/lib/settings";
 import { tvHover } from "@/lib/keyboard-navigation";
 import { Section, Segmented, ToggleRow } from "../shared";
@@ -14,9 +15,13 @@ export function PickerTab() {
     <>
       <Section
         title={t("Picker layout")}
-        subtitle={t(
+        subtitle={`${t(
           "Condensed shows a top pick, quality tiles, and a drawer. Stremio is a flat list grouped by addon, no scoring.",
-        )}
+        )} ${bidiIsolate(
+          t(
+            "Harbor Modern puts the picture and the filters at the side and every source in one list you sort by its headings.",
+          ),
+        )}`}
       >
         <div className="grid items-center gap-6 min-[900px]:grid-cols-[minmax(0,1fr)_340px]">
           <PickerLayoutPicker
@@ -64,11 +69,21 @@ export function PickerTab() {
         />
         <ToggleRow
           label={t("Show full descriptions")}
-          sub={t(
+          sub={`${t(
             "Show complete addon descriptions in the Stremio picker, downloads, and Big Picture.",
-          )}
+          )} ${bidiIsolate(
+            t(
+              "In Harbor Modern it shows file names in full, and the addon's whole description where there is no file name.",
+            ),
+          )}`}
           value={settings.fullStreamDescription}
           onChange={(v) => update({ fullStreamDescription: v })}
+        />
+        <ToggleRow
+          label={t("Artwork behind the picker")}
+          sub={t("Fades the title's artwork in behind the whole picker. Harbor Modern only.")}
+          value={settings.pickerModernBackdrop}
+          onChange={(v) => update({ pickerModernBackdrop: v })}
         />
       </Section>
     </>
@@ -87,6 +102,7 @@ function PickerLayoutPicker({
   const options = [
     { id: "condensed", label: t("Condensed") },
     { id: "stremio", label: t("Stremio") },
+    { id: "modern", label: t("Harbor Modern") },
   ] as const;
 
   return (

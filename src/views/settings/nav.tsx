@@ -4746,6 +4746,9 @@ const SETTINGS_OPTIONS: SettingsOption[] = [
     tab: "picker",
     anchorTitle: "Picker layout",
     keywords: [
+      "harbor modern",
+      "modern picker",
+      "sortable list",
       "condensed",
       "stremio layout",
       "picker style",
@@ -4774,6 +4777,20 @@ const SETTINGS_OPTIONS: SettingsOption[] = [
       "trim",
       "tidier rows",
       "addon description",
+      "full file names",
+    ],
+  },
+  {
+    label: "Artwork behind the picker",
+    section: "streaming",
+    tab: "picker",
+    anchorTitle: "Picker details",
+    keywords: [
+      "picker artwork",
+      "picker background",
+      "picker backdrop",
+      "source list background",
+      "harbor modern",
     ],
   },
   {
