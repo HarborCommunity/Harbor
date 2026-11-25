@@ -39,6 +39,7 @@ test("Back and Refresh stand above both columns, in a page with room for them", 
       isAnime: false,
       pipelineDone: true,
       cachedOnly: false,
+      noneCached: false,
       onCachedOnly: () => {},
     };
     return (

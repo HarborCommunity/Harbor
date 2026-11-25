@@ -66,9 +66,10 @@ test("the modern look plays and queues through the page", () => {
   assert.match(list, /onCache=\{onCache\}/);
   assert.match(list, /streams=\{displayStreams\}/);
   assert.match(list, /ranked=\{filteredPicker\.ranked\}/);
+  assert.match(list, /noneCached=\{filteredPicker\.noneCached\}\s+onCachedOnly=\{setCachedOnly\}/);
   assert.match(
     picker,
-    /const primaryCandidates = \[hostBest, result\.picker\.primary, \.\.\.ranked\][\s\S]*?return \{ primary, byTier, all, allRaw, ranked, fellBack \};/,
+    /const primaryCandidates = \[hostBest, result\.picker\.primary, \.\.\.ranked\][\s\S]*?return \{ primary, byTier, all, allRaw, ranked, fellBack, noneCached \};/,
     "the order the page itself takes its best source from: ready first, in a room the host's",
   );
   assert.match(
@@ -121,7 +122,7 @@ const cachedOnlyLines = () => {
 };
 const left = (all: Entry[], modern: boolean, cachedOnly = true, debrids = ["tb"]): string[] => {
   const args = ["cachedOnly", "debrids", "all", "isCached", "modern", "opensPage"];
-  const run = new Function(...args, `${cachedOnlyLines()}\nreturn all;`);
+  const run = new Function(...args, `let noneCached;\n${cachedOnlyLines()}\nreturn all;`);
   const isCached = (s: Entry) => s.cached;
   const opensPage = (s: Entry) => s.page;
   return run(cachedOnly, debrids, all, isCached, modern, opensPage).map((s: Entry) => s.name);
@@ -131,7 +132,11 @@ test("with Cached only on the modern look has no entry that only opens a web pag
   const list = [notice, ready, other];
   assert.deepEqual(left(list, true), ["ready"]);
   assert.deepEqual(left(list, false), ["notice with a sign", "ready"], "the other looks as before");
-  assert.deepEqual(left([notice, other], true), [notice.name, other.name], "nothing is cached");
+  assert.deepEqual(
+    left([notice, other], true),
+    [notice.name, other.name],
+    "nothing is cached, which the look is told",
+  );
   assert.deepEqual(left([notice, other], false), [notice.name]);
   const lines = cachedOnlyLines();
   const memo = picker.slice(picker.indexOf(lines), picker.indexOf("const anyAddonRanked"));
@@ -182,6 +187,19 @@ test("what has failed is taken back nowhere else, so the Stremio and Condensed l
   for (const own of ["<PickerScrollTop", "<SeasonPackEmptyState"]) {
     assert.match(part(own), /onRefresh=\{refresh\}/, `${own} is never drawn in the modern look`);
   }
+});
+
+test("that nothing is cached is told to the modern look alone", () => {
+  const told = [...picker.matchAll(/^.*\bnoneCached\b.*$/gm)].map(([line]) => line.trim());
+  assert.deepEqual(told, [
+    "let noneCached = false;",
+    "else noneCached = modern && all.length > 0;",
+    "else fellBack = !noneCached;",
+    "return { primary, byTier, all, allRaw, ranked, fellBack, noneCached };",
+    "noneCached: filteredPicker?.noneCached ?? false,",
+    "!filteredPicker?.noneCached && (",
+    "noneCached={filteredPicker.noneCached}",
+  ]);
 });
 
 test("the page itself keeps what was filtered, because a Play attempt takes the look off it", () => {

@@ -36,6 +36,8 @@ export type ModernListProps = {
   streams: ScoredStream[];
   /** The same sources in the order the page ranks them, whatever order it shows them in. */
   ranked: ScoredStream[];
+  noneCached: boolean;
+  onCachedOnly: (v: boolean) => void;
   /** The page's own best source, which need not be in the list. */
   preferred: ScoredStream | null;
   previousMatch: ScoredStream | null;
@@ -95,6 +97,8 @@ export function ModernList({
   absoluteEpisode,
   streams,
   ranked,
+  noneCached,
+  onCachedOnly,
   preferred,
   previousMatch,
   lastPlayedStream,
@@ -116,7 +120,7 @@ export function ModernList({
   const { settings } = useSettings();
   const state = useModernState();
   const { filters, clearFilters, setSort } = state;
-  const ctx = useModernContext(streams, !!episode, isAnime);
+  const ctx = useModernContext(streams, !!episode, isAnime, noneCached);
   const sort = orderName === "together" && !state.sorted ? null : state.sort;
 
   // While the rows are held no row moves, comes in or goes away, not even when newer facts of a
@@ -262,6 +266,7 @@ export function ModernList({
               onClick={(event) => {
                 handOnFocus(event, "[data-list]", "[data-headings] button");
                 clearFilters();
+                if (noneCached) onCachedOnly(false);
               }}
               className="text-ink underline decoration-edge underline-offset-[3px] transition-colors hover:decoration-ink"
             >

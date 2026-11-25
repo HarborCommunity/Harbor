@@ -530,6 +530,7 @@ test("a stored sort keeps nothing but its two values", () => {
 
 const ctx = (partial: Partial<ModernContext> = {}): ModernContext => ({
   isEpisode: true,
+  noneCached: false,
   dubSub: (s) => streamDubSub(s.audioLanguages, true),
   addonOf: (s) => ({ id: s.addonUrl ?? s.addonId, name: s.addonName }),
   ...partial,
@@ -649,6 +650,20 @@ test("with two filters on, each group counts with the other one", () => {
     { value: "1080p", count: 1 },
     { value: "720p", count: 1 },
   ]);
+});
+
+test("with Cached only on and nothing cached, no source is left and no choice leaves one", () => {
+  const noneCached = ctx({ noneCached: true });
+  for (const filters of [{}, { resolution: "720p" }, { dub: "dub", addon: "c" }]) {
+    assert.deepEqual(applyModernFilters(six(), filters, noneCached), []);
+    const { main, more } = modernGroups(six(), filters, noneCached);
+    const all = modernGroups(six(), filters, ctx());
+    assert.deepEqual([keys(main), keys(more)], [keys(all.main), keys(all.more)]);
+    for (const [i, group] of main.entries()) {
+      const offered = all.main[i].options.map(({ value }) => ({ value, count: 0 }));
+      assert.deepEqual(group.options, offered, group.key);
+    }
+  }
 });
 
 test("a group the list offers only one choice of is not there", () => {
@@ -1432,6 +1447,7 @@ test("a source with nothing known goes through every rule and is sorted last", (
   }
   const ctx: ModernContext = {
     isEpisode: true,
+    noneCached: false,
     dubSub: () => null,
     addonOf: (s) => ({ id: s.addonId, name: s.addonName }),
   };
@@ -1484,6 +1500,7 @@ test("five hundred sources are filtered, sorted and counted at once", () => {
   }));
   const ctx: ModernContext = {
     isEpisode: false,
+    noneCached: false,
     dubSub: () => null,
     addonOf: (s) => ({ id: s.addonId, name: s.addonName }),
   };

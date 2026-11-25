@@ -9,6 +9,7 @@ export function useModernContext(
   streams: ScoredStream[],
   isEpisode: boolean,
   isAnime: boolean,
+  noneCached: boolean,
 ): ModernContext {
   const { settings } = useSettings();
   const marksDub = settings.showDubBadge;
@@ -19,12 +20,13 @@ export function useModernContext(
   return useMemo(
     () => ({
       isEpisode,
+      noneCached,
       dubSub: (s) => (marksDub && !opensPage(s) ? streamDubSub(s.audioLanguages, isAnime) : null),
       addonOf: (s) => {
         const id = addonInstanceKey(s);
         return { id, name: addonNames.get(id) ?? s.addonName };
       },
     }),
-    [isEpisode, isAnime, marksDub, addonNames],
+    [isEpisode, isAnime, noneCached, marksDub, addonNames],
   );
 }

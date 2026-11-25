@@ -782,6 +782,7 @@ test("an entry that only opens a web page is sorted last and passes the add-on's
   }
   const ctx: ModernContext = {
     isEpisode: true,
+    noneCached: false,
     dubSub: () => "dual",
     addonOf: (s) => ({ id: s.addonId, name: s.addonName }),
   };

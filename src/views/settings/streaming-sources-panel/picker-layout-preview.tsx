@@ -85,11 +85,14 @@ export function PickerLayoutPreview({ layout }: { layout: Settings["pickerLayout
               isAnime={false}
               pipelineDone
               cachedOnly={false}
+              noneCached={false}
               onCachedOnly={NOOP}
             >
               <ModernList
                 streams={streams}
                 ranked={streams}
+                noneCached={false}
+                onCachedOnly={NOOP}
                 preferred={streams[0]}
                 previousMatch={null}
                 lastPlayedStream={null}

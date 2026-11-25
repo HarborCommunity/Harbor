@@ -56,12 +56,18 @@ export async function renderModern(
     if (isAway) return <p>Connecting</p>;
     return (
       <ModernShell {...shellProps} state={state}>
-        {body(<ModernList {...listProps} />)}
+        {body(
+          <ModernList
+            {...listProps}
+            noneCached={shellProps.noneCached}
+            onCachedOnly={shellProps.onCachedOnly}
+          />,
+        )}
       </ModernShell>
     );
   }
 
-  let listProps: ModernListProps = {
+  let listProps: Omit<ModernListProps, "noneCached" | "onCachedOnly"> = {
     ranked: props.streams,
     preferred: props.streams[0] ?? null,
     previousMatch: null,
@@ -89,6 +95,7 @@ export async function renderModern(
     isAnime: listProps.isAnime,
     pipelineDone: listProps.pipelineDone,
     cachedOnly: false,
+    noneCached: false,
     onCachedOnly: () => {},
     ...options.shell,
   };

@@ -71,6 +71,7 @@ export function ModernFilters({
   isAnime,
   isCached,
   cachedOnly,
+  noneCached,
   onCachedOnly,
 }: {
   streams: ScoredStream[];
@@ -78,11 +79,12 @@ export function ModernFilters({
   isAnime: boolean;
   isCached: (s: ScoredStream) => boolean;
   cachedOnly: boolean;
+  noneCached: boolean;
   onCachedOnly: (v: boolean) => void;
 }) {
   const t = useT();
   const { filters, setFilter, clearFilters, ask, moreOpen: opened, openMore } = useModernState();
-  const ctx = useModernContext(streams, isEpisode, isAnime);
+  const ctx = useModernContext(streams, isEpisode, isAnime, noneCached);
   const groups = useMemo(() => modernGroups(streams, filters, ctx), [streams, filters, ctx]);
   // An add-on's id is its address, private keys and all, so it never stands in for the name.
   const seen = useRef(new Map<string, string>());

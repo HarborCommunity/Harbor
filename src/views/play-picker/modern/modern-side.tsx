@@ -21,6 +21,7 @@ export function ModernSide({
   isAnime,
   pipelineDone,
   cachedOnly,
+  noneCached,
   onCachedOnly,
 }: {
   meta: Meta;
@@ -31,6 +32,7 @@ export function ModernSide({
   isAnime: boolean;
   pipelineDone: boolean;
   cachedOnly: boolean;
+  noneCached: boolean;
   onCachedOnly: (v: boolean) => void;
 }) {
   const t = useT();
@@ -105,6 +107,7 @@ export function ModernSide({
           streams={streams}
           isEpisode={!!episode}
           isAnime={isAnime}
+          noneCached={noneCached}
           isCached={startsAtOnce}
           pipelineDone={pipelineDone}
         />
@@ -120,6 +123,7 @@ export function ModernSide({
         isAnime={isAnime}
         isCached={startsAtOnce}
         cachedOnly={cachedOnly}
+        noneCached={noneCached}
         onCachedOnly={onCachedOnly}
       />
     </section>
@@ -131,6 +135,7 @@ function Tally({
   streams,
   isEpisode,
   isAnime,
+  noneCached,
   isCached,
   pipelineDone,
 }: {
@@ -138,12 +143,13 @@ function Tally({
   streams: ScoredStream[];
   isEpisode: boolean;
   isAnime: boolean;
+  noneCached: boolean;
   isCached: (s: ScoredStream) => boolean;
   pipelineDone: boolean;
 }) {
   const t = useT();
   const { filters } = useModernState();
-  const ctx = useModernContext(streams, isEpisode, isAnime);
+  const ctx = useModernContext(streams, isEpisode, isAnime, noneCached);
   const matching = useMemo(
     () => applyModernFilters(streams, filters, ctx),
     [streams, filters, ctx],

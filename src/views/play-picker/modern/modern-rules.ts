@@ -370,6 +370,8 @@ export type ModernFilters = Partial<Record<ModernDimKey, string>>;
 
 export type ModernContext = {
   isEpisode: boolean;
+  /** "Cached only" is on and nothing in the list is cached, so none of it is shown. */
+  noneCached: boolean;
   dubSub: (s: ScoredStream) => "sub" | "dub" | "dual" | null;
   addonOf: (s: ScoredStream) => { id: string; name: string };
 };
@@ -470,6 +472,7 @@ export function applyModernFilters<T extends ScoredStream>(
   ctx: ModernContext,
   except?: ModernDimKey,
 ): T[] {
+  if (ctx.noneCached) return [];
   const active = activeFilters(filters, except);
   if (active.length === 0) return streams;
   return streams.filter((s) => active.every((key) => matches(s, key, filters, ctx)));
@@ -514,7 +517,9 @@ export function modernGroups(
   for (const s of streams) {
     const mismatches = active.filter((key) => !matches(s, key, filters, ctx));
     for (const [key, counts] of tally) {
-      const counted = mismatches.length === 0 || (mismatches.length === 1 && mismatches[0] === key);
+      const counted =
+        !ctx.noneCached &&
+        (mismatches.length === 0 || (mismatches.length === 1 && mismatches[0] === key));
       for (const value of dimValues(s, key, ctx)) {
         counts.set(value, (counts.get(value) ?? 0) + (counted ? 1 : 0));
       }

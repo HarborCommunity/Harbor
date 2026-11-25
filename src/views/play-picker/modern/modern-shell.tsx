@@ -16,6 +16,7 @@ export type ModernShellProps = {
   isAnime: boolean;
   pipelineDone: boolean;
   cachedOnly: boolean;
+  noneCached: boolean;
   onCachedOnly: (v: boolean) => void;
   children: ReactNode;
 };

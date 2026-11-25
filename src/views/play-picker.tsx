@@ -414,17 +414,21 @@ export function PlayPicker({
       const langFiltered = all.filter((s) => streamMatchesLangs(s, preferredLangs));
       if (langFiltered.length > 0) all = langFiltered;
     }
+    // With nothing cached the other looks show everything; the modern one shows none of it, so that
+    // its switch keeps its word.
+    let noneCached = false;
     if (cachedOnly && (modern || debrids.length > 0)) {
       // To the modern look a web page is never cached, whatever signs its text has.
       const cached = all.filter((s) => isCached(s) && !(modern && opensPage(s)));
       if (cached.length > 0) all = cached;
+      else noneCached = modern && all.length > 0;
     }
     let allRaw = all;
     let fellBack = false;
     if (activeStreamFilter && !hostMatch) {
       const matched = all.filter((s) => matchesCustomFilter(s, activeStreamFilter));
       if (matched.length > 0) all = matched;
-      else fellBack = true;
+      else fellBack = !noneCached;
     }
     if (all.length === 0 && candidatePool.length > 0) {
       all = candidatePool;
@@ -445,7 +449,7 @@ export function PlayPicker({
       (s): s is ScoredStream => s != null && all.includes(s),
     );
     const primary = primaryCandidates[0] ?? null;
-    return { primary, byTier, all, allRaw, ranked, fellBack };
+    return { primary, byTier, all, allRaw, ranked, fellBack, noneCached };
   }, [
     result,
     langFilter,
@@ -1181,6 +1185,7 @@ export function PlayPicker({
                 isAnime: isAnimeMetaId,
                 pipelineDone,
                 cachedOnly,
+                noneCached: filteredPicker?.noneCached ?? false,
                 onCachedOnly: setCachedOnly,
               }
             : null
@@ -1337,7 +1342,8 @@ export function PlayPicker({
             onOpenSettings={() => openSettings("streaming")}
           />
         ) : (
-          !isSeasonDownload && (
+          !isSeasonDownload &&
+          !filteredPicker?.noneCached && (
             <PickerEmptyLadder
               meta={meta}
               result={result}
@@ -1381,6 +1387,8 @@ export function PlayPicker({
             absoluteEpisode={animeAbsoluteEpisode}
             streams={displayStreams}
             ranked={filteredPicker.ranked}
+            noneCached={filteredPicker.noneCached}
+            onCachedOnly={setCachedOnly}
             preferred={previousMatch ?? sameSourceMatch ?? filteredPicker.primary}
             previousMatch={previousMatch}
             lastPlayedStream={lastPlayedMatch}
