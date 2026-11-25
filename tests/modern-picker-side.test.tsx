@@ -281,6 +281,7 @@ test("every text that comes from data has its own direction beside the app's wor
       [...group("Addon")!.querySelectorAll("button > bdi")].map((label) => label.textContent),
       ["All", "Comet (v2)", "Other"],
     );
+    assert.equal(raw('[data-cell="from"] bdi'), "Comet (v2)");
   } finally {
     await show.unmount();
   }
@@ -371,7 +372,7 @@ test("above the list in the smallest window everything steps closer, so that the
   });
   try {
     const low = "@max-[1084px]/modern:[@media(max-height:760px)]:";
-    for (const part of ["section", "[data-picture]", "h1", "[data-filters]"]) {
+    for (const part of ["section", "[data-picture]", "h1", "[data-filters]", "[data-pick]"]) {
       assert.ok(document.querySelector(part)!.className.includes(low), part);
     }
   } finally {
