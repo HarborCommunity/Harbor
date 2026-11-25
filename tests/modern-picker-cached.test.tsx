@@ -4,17 +4,22 @@ import test from "node:test";
 import ts from "typescript";
 import type { CustomStreamFilter } from "@/lib/streams/custom-filters";
 import type { StreamMode } from "@/lib/streams/mode";
-import type { ScoredStream } from "@/lib/streams/types";
+import type { ScoredStream, Stream } from "@/lib/streams/types";
 import type { ModernListProps } from "@/views/play-picker/modern/modern-list";
 import type { ModernShellProps } from "@/views/play-picker/modern/modern-shell";
+import { LAYOUTS, RESULTS, aggregatorAnswer } from "./helpers/aggregator-results.ts";
 import { act, pointer, renderModern, source, type LookProps } from "./helpers/modern-picker.tsx";
 
 const { StreamModeToggle } = await import("@/components/stream-mode-toggle");
 const { hasCachedMarker, hasUncachedMarker } = await import("@/lib/streams/cached");
 const { matchesCustomFilter } = await import("@/lib/streams/custom-filters");
 const { filterStreamsByMode } = await import("@/lib/streams/mode");
+const { parseStream } = await import("@/lib/streams/parser/parser-stream");
 const rules = await import("@/views/play-picker/modern/modern-rules");
-const { streamMatchesLangs } = await import("@/views/play-picker/picker-utils");
+const { anyStreamCached, streamIsCached, streamMatchesLangs } =
+  await import("@/views/play-picker/picker-utils");
+const { FACET_DIMS, facetOptions, matchesFacets } =
+  await import("@/views/play-picker/stream-facets");
 
 // --- the page -----------------------------------------------------------------------------------
 
@@ -152,7 +157,6 @@ async function inPage(
       {
         cachedOnly: now.cachedOnly,
         noneCached,
-        isCached: isCachedOnPage(now.debrids),
         onCachedOnly: (on) => void ask({ cachedOnly: on }),
       },
     ];
@@ -455,5 +459,223 @@ test("in the other looks the same switch to P2P shows the torrents, as before", 
     assert.deepEqual(pageList(sent, on).all, sent.slice(0, 3), look);
     assert.deepEqual(pageList(sent, { ...on, streamMode: "p2p" }).all, sent.slice(3), look);
     assert.deepEqual(pageList(sent, { ...on, debrids: debrids() }).all, sent, "with no debrid");
+  }
+});
+
+// --- one meaning of cached ----------------------------------------------------------------------
+
+const TB = { slug: "tb", name: "TorBox", queueCache: () => undefined };
+const KEYS = debrids(RD, TB);
+
+/** A source as Harbor reads it from what its add-on sends. */
+const read = (group: string, stream: Partial<Stream>, known: Partial<ScoredStream> = {}) => {
+  const filename = `A.Film.2020.1080p.WEB-DL.H.264-${group}.mkv`;
+  const sent = { addonId: "made.up", addonName: "Made-up", name: "Made-up", title: filename };
+  const parsed = parseStream({ ...sent, behaviorHints: { filename }, ...stream });
+  return { ...parsed, score: 0, reasons: [], tier: "1080p", ...known } as ScoredStream;
+};
+
+let hashes = 0;
+const hash = () => ({ infoHash: (hashes += 1).toString(16).padStart(40, "c") });
+const at = (path: string) => ({ url: `https://made-up.test/${path}` });
+const checked = { cached: { rd: true }, cacheVerified: { rd: true } };
+
+type Kind = [
+  group: string,
+  stream: Partial<Stream>,
+  /** What its row says with keys for Real-Debrid and TorBox in Harbor. */
+  words: string,
+  /** What the Stremio look's filter calls it. */
+  facet: "Cached" | "Debrid" | "P2P",
+  known?: Partial<ScoredStream>,
+];
+const KINDS: readonly Kind[] = [
+  // What Harbor asked a debrid.
+  ["CHECKED", hash(), "Cached on Real-Debrid", "Cached", checked],
+  [
+    "OWNED",
+    hash(),
+    "In your Real-Debrid library",
+    "Cached",
+    { ...checked, inLibrary: { rd: true } },
+  ],
+  ["SHELVED", hash(), "In your Real-Debrid library", "P2P", { inLibrary: { rd: true } }],
+  // Only the add-on says it, by a sign or of a debrid without a key here, so no debrid is named.
+  ["SIGNED", { name: "⚡ Made-up 1080p", ...at("signed") }, "Cached", "Debrid"],
+  ["TICKED", { name: "Made-up ✅", ...hash() }, "Cached", "Debrid"],
+  ["ELSEWHERE", { name: "[AD+] Made-up", ...hash() }, "Cached", "Cached"],
+  [
+    "CLOCKED",
+    { name: "[AD+] Made-up", description: "⏳ 2h", ...at("clocked") },
+    "Cached",
+    "Cached",
+  ],
+  // A link starts at once if its add-on does not say otherwise. Its row says nothing of that.
+  ["PLAIN", at("plain"), "", "Debrid"],
+  // A torrent's own link says nothing of a cache, and without an address there is none.
+  ["BOTH", { ...at("both"), ...hash() }, "", "P2P"],
+  ["EMPTY", { url: "" }, "Not cached yet", "Debrid"],
+  ["WAITING", { name: "⏳ Made-up", ...at("waiting") }, "Not cached yet", "Debrid"],
+  ["FETCHED", { name: "[RD download] Made-up", ...hash() }, "Not cached yet", "Debrid"],
+  ["TORRENT", hash(), "Not cached yet", "P2P"],
+  ["QUEUED", hash(), "Queued on TorBox", "P2P"],
+  [
+    "PAGE",
+    { name: "⚡ 24 ready ✅", title: undefined, externalUrl: "https://made-up.test/page" },
+    "External",
+    "Debrid",
+  ],
+];
+const kinds = () => KINDS.map(([group, stream, , , known]) => read(group, stream, known));
+const groupsOf = (which: (kind: Kind) => boolean) => KINDS.filter(which).map(([group]) => group);
+const CACHED_WORDS = /^(?:Cached|In your) ?/;
+const READY = groupsOf(([group, , words]) => group === "PLAIN" || CACHED_WORDS.test(words));
+
+const groupOf = (row: HTMLElement) => {
+  const release = row.querySelector("[data-release]")!.textContent!;
+  return KINDS.find(([group]) => release.includes(group))?.[0] ?? "PAGE";
+};
+const availability = (row: HTMLElement) =>
+  row.querySelector('[data-cell="from"] p')?.textContent ?? "";
+const callCached = () => rows().filter((row) => CACHED_WORDS.test(availability(row)));
+const choices = () =>
+  new Map(
+    [...document.querySelectorAll('[data-group="availability"] button')].map((b) => [
+      b.querySelector("bdi")!.textContent!,
+      Number(b.querySelector("span")?.textContent),
+    ]),
+  );
+const ready = () => Number(/(\d+) ready to start at once$/.exec(says("[data-tally]")!)![1]);
+
+test("a source that its add-on calls cached is found under Availability, Cached", () =>
+  inPage(kinds(), { debrids: KEYS }, async (page) => {
+    await page.filter("availability", "Cached");
+    for (const group of ["SIGNED", "TICKED"]) {
+      assert.ok(rows().map(groupOf).includes(group), `the row of ${group} says "Cached"`);
+    }
+  }));
+
+test("the rows, the count, Cached only and the Availability filter mean the same by cached", async () => {
+  for (const keys of [KEYS, debrids(RD), debrids()]) {
+    const here = `${keys.length} debrids`;
+    const sent = kinds();
+    const queuedHash = sent[KINDS.findIndex(([group]) => group === "QUEUED")].infoHash!;
+    await inPage(
+      sent,
+      { debrids: keys },
+      async (page) => {
+        const words = rows().map(availability);
+        if (keys === KEYS)
+          assert.deepEqual(
+            words,
+            KINDS.map(([, , said]) => said),
+          );
+        // Without its key nobody has asked that debrid, and of a link no row says anything.
+        const silent = keys.length > 0 ? ["PLAIN"] : ["PLAIN", "SHELVED"];
+        const said = READY.filter((group) => !silent.includes(group));
+        assert.deepEqual(callCached().map(groupOf), said, here);
+        assert.equal(ready(), READY.length, here);
+
+        await act(() => button("More filters")!.click());
+        assert.equal(choices().get("Cached"), READY.length, here);
+        for (const [value, count] of choices()) {
+          if (value === "Any") continue;
+          await page.filter("availability", value);
+          assert.equal(rows().length, count, `${here}: ${value}`);
+          assert.equal(callCached().length, value === "Cached" ? said.length : 0, value);
+          if (value === "Cached") assert.deepEqual(rows().map(groupOf), READY, here);
+        }
+        await page.filter("availability", null);
+
+        await act(() => cachedOnly().click());
+        assert.deepEqual(rows().map(groupOf), READY, `${here}: Cached only`);
+        assert.equal(ready(), READY.length, here);
+      },
+      { queuedHash },
+    );
+  }
+});
+
+test("without a debrid in Harbor the same sources are cached", async () => {
+  for (const [what, sent, asked, left, direct = left] of states()) {
+    for (const streamMode of MODES) {
+      const expected = { both: left, addons: direct, p2p: [] }[streamMode];
+      const set = { ...asked, streamMode, debrids: debrids(), cachedOnly: true };
+      await inPage(sent, set, async () => {
+        assert.deepEqual(names(), expected, `${what}, ${streamMode}`);
+      });
+    }
+  }
+});
+
+test("what an aggregator sends is counted, kept and found as cached, or none of it", async () => {
+  for (const layout of LAYOUTS) {
+    const sent = aggregatorAnswer(layout, RESULTS, "bottom").map(
+      (stream) => ({ ...parseStream(stream), score: 0, reasons: [], tier: "SD" }) as ScoredStream,
+    );
+    for (const keys of [KEYS, debrids()]) {
+      const here = `${layout}, ${keys.length} debrids`;
+      await inPage(sent, { debrids: keys }, async (page) => {
+        const all = ready();
+        const called = callCached().length;
+        const not = rows().filter((row) => /^(?:Not cached|External)/.test(availability(row)));
+        assert.ok(called <= all && all <= rows().length - not.length, here);
+        await act(() => button("More filters")!.click());
+        assert.equal(choices().get("Cached"), all, here);
+        await page.filter("availability", "Cached");
+        assert.deepEqual([rows().length, callCached().length], [all, called], here);
+        await page.filter("availability", null);
+        await act(() => cachedOnly().click());
+        assert.deepEqual([rows().length, callCached().length], [all, called], here);
+      });
+    }
+  }
+});
+
+test("the words name a debrid with a key, whoever calls the source cached on it", async () => {
+  const one = (name: string) => kinds()[KINDS.findIndex(([group]) => group === name)];
+  const told = read("TOLD", { name: "[RD+] Made-up", ...hash() });
+  assert.deepEqual([told.cached, told.cacheVerified], [{ rd: true }, {}], "its text alone says so");
+  assert.deepEqual(one("CHECKED").cacheVerified, { rd: true });
+  for (const [stream, row, pick] of [
+    [one("OWNED"), "In your Real-Debrid library", "In your Real-Debrid library."],
+    [one("CHECKED"), "Cached on Real-Debrid", "Cached on Real-Debrid, so it starts at once."],
+    [told, "Cached on Real-Debrid", "Cached on Real-Debrid, so it starts at once."],
+    [one("SIGNED"), "Cached", "Cached, so it starts at once."],
+    [one("ELSEWHERE"), "Cached", "Cached, so it starts at once."],
+    [one("PLAIN"), "", null],
+  ] as const) {
+    const here = stream.releaseGroup ?? "";
+    await inPage([stream], { debrids: KEYS }, async () => {
+      assert.equal(availability(rows()[0]), row, here);
+      assert.equal(says("[data-pick-why]"), pick, here);
+      assert.equal(says("[data-tally]"), "1 source · 1 ready to start at once", here);
+    });
+  }
+});
+
+test("the Stremio look, Big Picture and the page's own test call cached what they did", () => {
+  const sent = kinds();
+  const dim = FACET_DIMS.find(({ key }) => key === "cached")!;
+  const badged = [...READY.filter((group) => !/SHELVED|PLAIN/.test(group)), "PAGE"];
+  const onPage = [...READY.filter((group) => !/ELSEWHERE|CLOCKED/.test(group)), "EMPTY", "PAGE"];
+  for (const [i, [group, , , facet]] of KINDS.entries()) {
+    assert.equal(dim.valueOf(sent[i]), facet, group);
+    assert.equal(isCachedOnPage(KEYS)(sent[i]), onPage.includes(group), group);
+    assert.equal(streamIsCached(sent[i], KEYS), onPage.includes(group), group);
+    assert.equal(anyStreamCached(sent[i]), badged.includes(group), group);
+  }
+  assert.deepEqual(facetOptions(sent, dim), [
+    { key: "Cached", count: 4 },
+    { key: "Debrid", count: 7 },
+    { key: "P2P", count: 4 },
+  ]);
+  for (const value of dim.order) {
+    const found = sent.filter((s) => matchesFacets(s, { cached: value }));
+    assert.deepEqual(
+      found.map((s) => s.releaseGroup ?? "PAGE"),
+      groupsOf(([, , , facet]) => facet === value),
+      value,
+    );
   }
 });

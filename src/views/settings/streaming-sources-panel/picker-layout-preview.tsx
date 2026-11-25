@@ -81,7 +81,6 @@ export function PickerLayoutPreview({ layout }: { layout: Settings["pickerLayout
               state={modernState}
               meta={sample}
               streams={streams}
-              isCached={() => true}
               isAnime={false}
               pipelineDone
               cachedOnly={false}

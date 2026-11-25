@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { act, renderModern, source } from "./helpers/modern-picker.tsx";
+import { act, renderModern, source, withCached } from "./helpers/modern-picker.tsx";
 
 const { registerUiCatalog } = await import("../src/lib/i18n/translate.ts");
 
@@ -31,11 +31,8 @@ test("each count of the left column takes a language's own plural form", async (
     [22, "few", "sources", 5, "many"],
     [5, "many", "sources", 1, "one"],
   ] as const) {
-    const streams = films(count);
-    const view = await renderModern(
-      { streams, isCached: (s) => streams.indexOf(s) < ready },
-      { settings: { uiLanguage: "pl" } },
-    );
+    const streams = withCached(films(count), (i) => i < ready);
+    const view = await renderModern({ streams }, { settings: { uiLanguage: "pl" } });
     try {
       const start = `${readyForm}: ${ready} ready to start at once`;
       assert.equal(tally(), `${form}: ${count} ${word} · ${start}`);

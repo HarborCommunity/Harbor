@@ -1,6 +1,7 @@
 import { hasUncachedMarker } from "@/lib/streams/cached";
 import { extractFilenameLine } from "@/lib/streams/parser/parser-filename";
 import type { DebridSlug, HdrFormat, Resolution, ScoredStream } from "@/lib/streams/types";
+import { anyStreamCached } from "../picker-utils";
 import { FACET_DIMS } from "../stream-facets";
 
 export type ModernSortKey = "name" | "resolution" | "seeders" | "size";
@@ -28,6 +29,21 @@ function firstLine(text: string | undefined): string | undefined {
 /** An entry that only opens a web page has no file behind it, whatever its text says of one. */
 export function opensPage(s: Pick<ScoredStream, "url" | "infoHash" | "externalUrl">): boolean {
   return !s.url && !s.infoHash && !!s.externalUrl;
+}
+
+/** A link that its add-on does not call uncached. */
+function isReadyLink(s: ScoredStream): boolean {
+  return !!s.url && !s.infoHash && !hasUncachedMarker(s);
+}
+
+/**
+ * What this look calls cached, whoever says so: a debrid's library has it, Harbor's check of a
+ * debrid or the add-on calls it cached, or it is a link that its add-on does not call uncached. A
+ * row names the debrid and not who says so. A web page is never cached, whatever signs it has.
+ */
+export function startsAtOnce(s: ScoredStream): boolean {
+  if (opensPage(s)) return false;
+  return anyStreamCached(s) || Object.values(s.inLibrary).some(Boolean) || isReadyLink(s);
 }
 
 export type SourceTitle = {
@@ -447,9 +463,16 @@ function dimValue(
       return knownResolution(s);
     case "addon":
       return ctx.addonOf(s).id;
+    case "availability":
+      // Harbor's facet goes by debrids alone, and a row can say "Cached" without one.
+      return startsAtOnce(s) ? "Cached" : facetValue(s, key);
     default:
-      return FACETS.get(FACET_KEYS[key] ?? "")?.valueOf(s) ?? null;
+      return facetValue(s, key);
   }
+}
+
+function facetValue(s: ScoredStream, key: ModernDimKey): string | null {
+  return FACETS.get(FACET_KEYS[key] ?? "")?.valueOf(s) ?? null;
 }
 
 function matches(
@@ -591,7 +614,7 @@ function availabilityReason(
   const cached = namesOf(pick.cached);
   if (cached.length > 0) return { kind: "cached", providers: cached };
   if (addonCached) return { kind: "addon-cached" };
-  if (pick.url && !pick.infoHash && !hasUncachedMarker(pick)) return null;
+  if (isReadyLink(pick)) return null;
   const fetcher = debrids.find((d) => d.queueCache);
   if (fetcher) return { kind: "not-cached", provider: fetcher.name };
   return canStreamDirectly ? { kind: "peers" } : { kind: "not-cached", provider: null };

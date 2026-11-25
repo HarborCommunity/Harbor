@@ -121,11 +121,11 @@ const cachedOnlyLines = () => {
   return lines;
 };
 const left = (all: Entry[], modern: boolean, cachedOnly = true, debrids = ["tb"]): string[] => {
-  const args = ["cachedOnly", "debrids", "all", "isCached", "modern", "opensPage"];
+  const args = ["cachedOnly", "debrids", "all", "isCached", "modern", "startsAtOnce"];
   const run = new Function(...args, `let noneCached;\n${cachedOnlyLines()}\nreturn all;`);
   const isCached = (s: Entry) => s.cached;
-  const opensPage = (s: Entry) => s.page;
-  return run(cachedOnly, debrids, all, isCached, modern, opensPage).map((s: Entry) => s.name);
+  const startsAtOnce = (s: Entry) => s.cached && !s.page;
+  return run(cachedOnly, debrids, all, isCached, modern, startsAtOnce).map((s: Entry) => s.name);
 };
 
 test("with Cached only on the modern look has no entry that only opens a web page", () => {

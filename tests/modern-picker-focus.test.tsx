@@ -5,7 +5,7 @@ import type { Meta } from "@/lib/cinemeta";
 import type { ScoredStream } from "@/lib/streams/types";
 import type { PlayEpisode } from "@/lib/view";
 import type { ModernListProps } from "@/views/play-picker/modern/modern-list";
-import { act, renderModern, source, type Rendered } from "./helpers/modern-picker.tsx";
+import { act, renderModern, source, withCached, type Rendered } from "./helpers/modern-picker.tsx";
 
 const { moveFocus } = await import("@/lib/keyboard-navigation");
 
@@ -184,7 +184,7 @@ test("Clear leaves the focus on what stands next to it", async () => {
     [false, "codec", "Fewer filters"],
   ] as const) {
     await shown(
-      streams,
+      withCached(streams, () => cachedUseful),
       async (view) => {
         await act(() => view.state().setFilter(filter, filter === "codec" ? "HEVC" : "1080p"));
         const clear = button("Clear");
@@ -193,7 +193,6 @@ test("Clear leaves the focus on what stands next to it", async () => {
         assert.equal(clear.isConnected, false);
         assert.equal(focusSays(), expected);
       },
-      { shell: { isCached: () => cachedUseful } },
     );
   }
 });
@@ -206,19 +205,15 @@ const losing4K = (codec: string) => [
 
 /** The list loses its one film in 4K; the row of the resolutions stays for what is chosen in it. */
 const loses4K = async (
-  { codec, chosen, shell = {} }: { codec: string; chosen: string; shell?: object },
-  run: (view: Rendered) => Promise<void>,
+  { codec, chosen, cached = false }: { codec: string; chosen: string; cached?: boolean },
+  run: (view: Rendered, left: ScoredStream[]) => Promise<void>,
 ) => {
-  const [gone, ...left] = losing4K(codec);
-  await shown(
-    [gone, ...left],
-    async (view) => {
-      await act(() => view.state().setFilter("resolution", chosen));
-      await view.rerender({ streams: left, ranked: left });
-      await run(view);
-    },
-    { shell },
-  );
+  const [gone, ...left] = withCached(losing4K(codec), () => cached);
+  await shown([gone, ...left], async (view) => {
+    await act(() => view.state().setFilter("resolution", chosen));
+    await view.rerender({ streams: left, ranked: left });
+    await run(view, left);
+  });
 };
 
 const nextTo = [
@@ -230,8 +225,7 @@ const nextTo = [
 test("a row that goes with the filter it was there for hands the focus on", async () => {
   for (const [when, codec, cachedUseful, expected] of nextTo) {
     for (const chosen of ["4K", "1080p"]) {
-      const shell = { isCached: () => cachedUseful };
-      await loses4K({ codec, chosen, shell }, async () => {
+      await loses4K({ codec, chosen, cached: cachedUseful }, async () => {
         const any = choice("Resolution", "Any");
         await act(() => any.focus());
         await act(() => any.click());
@@ -244,8 +238,7 @@ test("a row that goes with the filter it was there for hands the focus on", asyn
 
 test("Clear hands the focus on to what is there when it has cleared", async () => {
   for (const [when, codec, cachedUseful, expected] of nextTo) {
-    const shell = { isCached: () => cachedUseful };
-    await loses4K({ codec, chosen: "4K", shell }, async () => {
+    await loses4K({ codec, chosen: "4K", cached: cachedUseful }, async () => {
       const clear = button("Clear");
       await act(() => clear.focus());
       await act(() => clear.click());
@@ -262,7 +255,6 @@ test("Clear switches Cached only off too, and leaves the focus where something c
     {
       shell: {
         cachedOnly: true,
-        isCached: () => false,
         onCachedOnly: (cachedOnly) => void view.rerender({}, { cachedOnly }),
       },
     },
@@ -322,10 +314,10 @@ const inTheBackground = async (run: () => Promise<void>) => {
 };
 
 test("a group that goes behind More filters under the focus leaves it on More filters", async () => {
-  const { six, noAddon, noHdr } = episode();
-  for (const before of [noAddon, noHdr]) {
-    for (const cachedUseful of [true, false]) {
-      const view = await renderEpisode(before, cachedUseful);
+  for (const cachedUseful of [true, false]) {
+    const { six, noAddon, noHdr } = episode(cachedUseful);
+    for (const before of [noAddon, noHdr]) {
+      const view = await renderEpisode(before);
       try {
         const web = choice("Source", "WEB-DL");
         await act(() => web.focus());
@@ -342,19 +334,14 @@ test("a group that goes behind More filters under the focus leaves it on More fi
 
 test("a group that goes away altogether hands the focus on", async () => {
   for (const [when, codec, cachedUseful, expected] of nextTo) {
-    const streams = losing4K(codec);
-    const shell = { isCached: () => cachedUseful };
-    await shown(
-      streams,
-      async (view) => {
-        const some = choice("Resolution", "1080p");
-        await act(() => some.focus());
-        await view.rerender({ streams: streams.slice(1), ranked: streams.slice(1) });
-        assert.equal(some.isConnected, false);
-        assert.equal(focusSays(), expected, when);
-      },
-      { shell },
-    );
+    const streams = withCached(losing4K(codec), () => cachedUseful);
+    await shown(streams, async (view) => {
+      const some = choice("Resolution", "1080p");
+      await act(() => some.focus());
+      await view.rerender({ streams: streams.slice(1), ranked: streams.slice(1) });
+      assert.equal(some.isConnected, false);
+      assert.equal(focusSays(), expected, when);
+    });
   }
 });
 
@@ -363,18 +350,16 @@ test("More filters that goes away hands the focus on", async () => {
     [true, "Cached only"],
     [false, "Release"],
   ] as const) {
-    await shown(
-      losing4K("HEVC"),
-      async (view) => {
-        const more = button("More filters");
-        await act(() => more.focus());
-        const alike = losing4K("H.264");
-        await view.rerender({ streams: alike, ranked: alike });
-        assert.equal(more.isConnected, false);
-        assert.equal(focusSays(), expected);
-      },
-      { shell: { isCached: () => cachedUseful } },
+    const [before, alike] = ["HEVC", "H.264"].map((codec) =>
+      withCached(losing4K(codec), () => cachedUseful),
     );
+    await shown(before, async (view) => {
+      const more = button("More filters");
+      await act(() => more.focus());
+      await view.rerender({ streams: alike, ranked: alike });
+      assert.equal(more.isConnected, false);
+      assert.equal(focusSays(), expected);
+    });
   }
 });
 
@@ -384,12 +369,12 @@ test("Cached only that greys out under the focus hands it on", async () => {
       ["HEVC", "More filters"],
       ["H.264", "Release"],
     ] as const) {
+      const streams = withCached(losing4K(codec), () => !pressed);
       const view = await renderModern(
-        { streams: losing4K(codec), debrids },
+        { streams, debrids },
         {
           shell: {
             cachedOnly: pressed,
-            isCached: () => !pressed,
             onCachedOnly: (cachedOnly) => void view.rerender({}, { cachedOnly }),
           },
         },
@@ -398,7 +383,7 @@ test("Cached only that greys out under the focus hands it on", async () => {
         const cachedOnly = document.querySelector<HTMLButtonElement>('[role="switch"]')!;
         await act(() => cachedOnly.focus());
         if (pressed) await act(() => cachedOnly.click());
-        else await view.rerender({}, { isCached: () => false });
+        else await view.rerender({ streams: withCached(streams, () => false) });
         assert.equal(cachedOnly.disabled, true);
         assert.equal(
           focusSays(),
@@ -413,33 +398,30 @@ test("Cached only that greys out under the focus hands it on", async () => {
 });
 
 test("what a group that stays loses hands the focus on as everything else does", async () => {
-  const [alpha, bravo, charlie, delta] = [
-    source("A.Film.2020.2160p.WEB-DL.HEVC-ALPHA.mkv"),
-    source("A.Film.2020.2160p.WEB-DL.H.264-BRAVO.mkv"),
-    source("A.Film.2020.1080p.BluRay.HEVC-CHARLIE.mkv"),
-    source("A.Film.2020.2160p.WEB-DL-DELTA.mkv", { codec: "AV1" }),
-  ];
-  const shell = { isCached: () => true };
+  const all = withCached(
+    [
+      source("A.Film.2020.2160p.WEB-DL.HEVC-ALPHA.mkv"),
+      source("A.Film.2020.2160p.WEB-DL.H.264-BRAVO.mkv"),
+      source("A.Film.2020.1080p.BluRay.HEVC-CHARLIE.mkv"),
+      source("A.Film.2020.2160p.WEB-DL-DELTA.mkv", { codec: "AV1" }),
+    ],
+    () => true,
+  );
   for (const [gone, label, there] of [
-    [alpha, "HEVC", true],
-    [delta, "AV1", false],
+    [all[0], "HEVC", true],
+    [all[3], "AV1", false],
   ] as const) {
-    const all = [alpha, bravo, charlie, delta];
-    await shown(
-      all,
-      async (view) => {
-        await act(() => view.state().openMore(true));
-        await act(() => view.state().setFilter("resolution", "4K"));
-        const some = choice("Video codec", label);
-        await act(() => some.focus());
-        const left = all.filter((s) => s !== gone);
-        await view.rerender({ streams: left, ranked: left });
-        assert.ok(groups().map(groupName).includes("Video codec"));
-        assert.deepEqual([some.isConnected, some.disabled], [there, there]);
-        assert.equal(focusSays(), "Cached only", label);
-      },
-      { shell },
-    );
+    await shown(all, async (view) => {
+      await act(() => view.state().openMore(true));
+      await act(() => view.state().setFilter("resolution", "4K"));
+      const some = choice("Video codec", label);
+      await act(() => some.focus());
+      const left = all.filter((s) => s !== gone);
+      await view.rerender({ streams: left, ranked: left });
+      assert.ok(groups().map(groupName).includes("Video codec"));
+      assert.deepEqual([some.isConnected, some.disabled], [there, there]);
+      assert.equal(focusSays(), "Cached only", label);
+    });
   }
 });
 
@@ -462,15 +444,15 @@ test("the focus stays in its own look", async () => {
 
 test("what the mouse has focused needs no new place", () =>
   using("pointer", async () => {
-    const { six, noAddon } = episode();
-    const view = await renderEpisode(noAddon, true);
+    const { six, noAddon } = episode(true);
+    const view = await renderEpisode(noAddon);
     try {
       await act(() => choice("Source", "WEB-DL").focus());
       await view.rerender({ streams: six, ranked: six });
       assert.equal(focusSays(), "nothing");
       const cachedOnly = document.querySelector<HTMLButtonElement>('[role="switch"]')!;
       await act(() => cachedOnly.focus());
-      await view.rerender({}, { isCached: () => false });
+      await view.rerender({ streams: withCached(six, () => false) });
       focusIsOn(cachedOnly, "the browser takes it from what has greyed out");
     } finally {
       await view.unmount();
@@ -500,8 +482,8 @@ test("a key or a controller takes over what the mouse has focused", () =>
       ["Control", "nothing", key({ key: "Control", ctrlKey: true })],
       ["Meta", "nothing", key({ key: "Meta", metaKey: true })],
     ] as [by: string, expected: string, ...uses: Use[]][]) {
-      const { six, noAddon } = episode();
-      const view = await renderEpisode(noAddon, true);
+      const { six, noAddon } = episode(true);
+      const view = await renderEpisode(noAddon);
       try {
         const any = choice("Source", "Any");
         await act(() => any.focus());
@@ -518,8 +500,8 @@ test("a key or a controller takes over what the mouse has focused", () =>
 
 test("what a key has taken over stays its own when the window comes back", () =>
   using("pointer", async () => {
-    const { six, noAddon } = episode();
-    const view = await renderEpisode(noAddon, true);
+    const { six, noAddon } = episode(true);
+    const view = await renderEpisode(noAddon);
     try {
       const web = choice("Source", "WEB-DL");
       await act(() => web.focus());
@@ -539,13 +521,12 @@ test("what a key has taken over stays its own when the window comes back", () =>
 
 test("where the focus was handed on to is not the mouse's either", () =>
   using("pointer", async () => {
-    const shell = { isCached: () => true };
-    await loses4K({ codec: "HEVC", chosen: "4K", shell }, async (view) => {
+    await loses4K({ codec: "HEVC", chosen: "4K", cached: true }, async (view, left) => {
       const any = choice("Resolution", "Any");
       await act(() => any.focus());
       await act(() => any.click());
       assert.equal(focusSays(), "Cached only");
-      await view.rerender({}, { isCached: () => false });
+      await view.rerender({ streams: withCached(left, () => false) });
       assert.equal(focusSays(), "More filters");
     });
   }));
@@ -591,8 +572,8 @@ test("what takes the focus itself in the same draw keeps it", async () => {
 });
 
 test("the focus is kept while only the window has lost its own", async () => {
-  const { six, noAddon } = episode();
-  const view = await renderEpisode(noAddon, true);
+  const { six, noAddon } = episode(true);
+  const view = await renderEpisode(noAddon);
   try {
     const web = choice("Source", "WEB-DL");
     await act(() => web.focus());
@@ -614,8 +595,8 @@ test("a window in the background hands the focus on as well", async () => {
       assert.equal(focusSays(), "More filters", "pressed, as the remote on a phone does");
     }),
   );
-  const { six, noAddon } = episode();
-  const view = await renderEpisode(noAddon, true);
+  const { six, noAddon } = episode(true);
+  const view = await renderEpisode(noAddon);
   try {
     await inTheBackground(async () => {
       await act(() => choice("Source", "WEB-DL").focus());
@@ -646,8 +627,8 @@ test("what goes away outside of the filters is not handed on", async () => {
 });
 
 test("a mouse that takes the focus in the background takes it for good", async () => {
-  const { six, noAddon } = episode();
-  const view = await renderEpisode(noAddon, true);
+  const { six, noAddon } = episode(true);
+  const view = await renderEpisode(noAddon);
   try {
     const web = choice("Source", "WEB-DL");
     await act(() => web.focus());
@@ -684,15 +665,13 @@ test("a greyed out control that has the TV navigation's ring hands that on too",
   own.scrollIntoView = function (this: Element) {
     scrolledTo.push(this.textContent!);
   };
-  const view = await renderModern(
-    { streams: losing4K("HEVC"), debrids },
-    { shell: { isCached: () => true } },
-  );
+  const streams = withCached(losing4K("HEVC"), () => true);
+  const view = await renderModern({ streams, debrids });
   try {
     const cachedOnly = document.querySelector<HTMLButtonElement>('[role="switch"]')!;
     await act(() => cachedOnly.focus());
     cachedOnly.setAttribute("data-tv-focused", "true");
-    await view.rerender({}, { isCached: () => false });
+    await view.rerender({ streams: withCached(streams, () => false) });
     assert.equal(focusSays(), "More filters");
     assert.deepEqual(scrolledTo, ["More filters"]);
     assert.equal(cachedOnly.hasAttribute("data-tv-focused"), false);
@@ -729,10 +708,11 @@ test("a row of buttons that goes after the focus has left it moves none", async 
 });
 
 /** An anime episode with six groups of filters, and with five: without Addon, and without HDR. */
-const episode = () => {
+const episode = (cached = false) => {
   const made = (partial: Partial<ScoredStream>) =>
     source("[A] A Show - 04 (1080p WEB-DL H.264).mkv", {
       audioLanguages: ["Japanese"],
+      cached: cached ? { rd: true } : {},
       ...partial,
     });
   const [one, other, comet] = [
@@ -753,16 +733,13 @@ const episode = () => {
     noHdr: [one, { ...other, hdrFormat: null }, comet],
   };
 };
-const renderEpisode = (streams: ScoredStream[], cachedUseful = false) =>
-  renderModern(
-    {
-      streams,
-      meta: { id: "kitsu:1", type: "series", name: "A Show" } as Meta,
-      episode: { season: 1, episode: 4 } as PlayEpisode,
-      isAnime: true,
-    },
-    { shell: { isCached: () => cachedUseful } },
-  );
+const renderEpisode = (streams: ScoredStream[]) =>
+  renderModern({
+    streams,
+    meta: { id: "kitsu:1", type: "series", name: "A Show" } as Meta,
+    episode: { season: 1, episode: 4 } as PlayEpisode,
+    isAnime: true,
+  });
 const FOUR = ["Release", "Audio", "Resolution", "HDR"];
 
 test("a row behind More filters stays when its filter is let go, and the focus in it", async () => {

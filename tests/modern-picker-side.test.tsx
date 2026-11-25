@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { Meta } from "@/lib/cinemeta";
 import type { PlayEpisode } from "@/lib/view";
-import { act, FILM, renderElement, renderModern, source } from "./helpers/modern-picker.tsx";
+import {
+  act,
+  FILM,
+  renderElement,
+  renderModern,
+  source,
+  withCached,
+} from "./helpers/modern-picker.tsx";
 
 const { ButtonRow } = await import("@/views/play-picker/modern/button-row");
 
@@ -411,13 +418,11 @@ test("an episode has its description, a film has none", async () => {
 const tally = () => text("[data-tally]");
 
 test("the count line says how long it is, how many sources there are and how many are ready", async () => {
-  const streams = episodeSources();
-  const ready = new Set([streams[0], streams[3]]);
+  const streams = withCached(episodeSources(), (i) => i === 0 || i === 3);
   const view = await renderModern({
     streams,
     meta: SHOW,
     episode: { ...EPISODE, runtime: 24 },
-    isCached: (s) => ready.has(s),
   });
   try {
     assert.equal(tally(), "24 min · 4 sources · 2 ready to start at once");
@@ -467,14 +472,8 @@ test("a film's length is read from its text, hours too", async () => {
 });
 
 test("the count line counts what the filters leave", async () => {
-  const streams = episodeSources();
-  const view = await renderModern({
-    streams,
-    meta: SHOW,
-    episode: EPISODE,
-    isAnime: true,
-    isCached: (s) => s === streams[0] || s === streams[3],
-  });
+  const streams = withCached(episodeSources(), (i) => i === 0 || i === 3);
+  const view = await renderModern({ streams, meta: SHOW, episode: EPISODE, isAnime: true });
   try {
     await act(() => view.state().setFilter("dub", "sub"));
     assert.equal(tally(), "2 of 4 sources · 1 ready to start at once");
@@ -558,9 +557,9 @@ test("the chosen choice stays pressable when it leaves nothing", async () => {
 
 test("Clear is there while something is filtered, and lets go of everything", async () => {
   const cachedOnly: boolean[] = [];
-  const streams = episodeSources();
+  const streams = withCached(episodeSources(), () => true);
   const view = await renderModern(
-    { streams, meta: SHOW, episode: EPISODE, isAnime: true, isCached: () => true },
+    { streams, meta: SHOW, episode: EPISODE, isAnime: true },
     { shell: { onCachedOnly: (v) => cachedOnly.push(v) } },
   );
   try {
@@ -582,9 +581,9 @@ test("Cached only is the page's own switch, greyed out when it could do nothing"
   const cachedOnly: boolean[] = [];
   const onCachedOnly = (v: boolean) => cachedOnly.push(v);
   const control = () => document.querySelector<HTMLButtonElement>('button[role="switch"]')!;
-  const streams = episodeSources();
+  const streams = withCached(episodeSources(), (i) => i === 0);
   const view = await renderModern(
-    { streams, meta: SHOW, episode: EPISODE, isCached: (s) => s === streams[0] },
+    { streams, meta: SHOW, episode: EPISODE },
     { shell: { onCachedOnly } },
   );
   try {
@@ -597,7 +596,7 @@ test("Cached only is the page's own switch, greyed out when it could do nothing"
     assert.equal(control().getAttribute("aria-checked"), "true");
     await act(() => control().click());
     assert.deepEqual(cachedOnly, [true, false]);
-    await view.rerender({}, { cachedOnly: false, isCached: () => false });
+    await view.rerender({ streams: withCached(streams, () => false) }, { cachedOnly: false });
     assert.equal(control().disabled, true, "with nothing ready");
     await view.rerender({}, { cachedOnly: true });
     assert.equal(control().disabled, false, "a switch that is on can be switched off");

@@ -66,7 +66,7 @@ import { CachedFilterPill, LanguageFilterPill } from "./play-picker/filter-pills
 import { PickerEmptyLadder } from "./play-picker/picker-empty-ladder";
 import { PickerBody } from "./play-picker/picker-body";
 import { ModernList } from "./play-picker/modern/modern-list";
-import { opensPage } from "./play-picker/modern/modern-rules";
+import { startsAtOnce } from "./play-picker/modern/modern-rules";
 import { useModernPickerState } from "./play-picker/modern/modern-state";
 import { NoSourcesConfiguredModal } from "./play-picker/no-sources-modal";
 import {
@@ -418,8 +418,7 @@ export function PlayPicker({
     // its switch keeps its word.
     let noneCached = false;
     if (cachedOnly && (modern || debrids.length > 0)) {
-      // To the modern look a web page is never cached, whatever signs its text has.
-      const cached = all.filter((s) => isCached(s) && !(modern && opensPage(s)));
+      const cached = all.filter(modern ? startsAtOnce : isCached);
       if (cached.length > 0) all = cached;
       else noneCached = modern && all.length > 0;
     }
@@ -1181,7 +1180,6 @@ export function PlayPicker({
                 episode,
                 absoluteEpisode: animeAbsoluteEpisode,
                 streams: displayStreams,
-                isCached,
                 isAnime: isAnimeMetaId,
                 pipelineDone,
                 cachedOnly,

@@ -12,7 +12,6 @@ export type ModernShellProps = {
   episode?: PlayEpisode;
   absoluteEpisode?: number | null;
   streams: ScoredStream[];
-  isCached: (s: ScoredStream) => boolean;
   isAnime: boolean;
   pipelineDone: boolean;
   cachedOnly: boolean;

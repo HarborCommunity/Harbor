@@ -4,7 +4,7 @@ import type { ScoredStream } from "@/lib/streams/types";
 import { ButtonRow } from "./button-row";
 import { KeptFocus } from "./kept-focus";
 import { useModernContext } from "./modern-context";
-import { modernGroups, type ModernDimKey, type ModernGroup } from "./modern-rules";
+import { modernGroups, startsAtOnce, type ModernDimKey, type ModernGroup } from "./modern-rules";
 import { useModernState } from "./modern-state";
 
 type Translate = ReturnType<typeof useT>;
@@ -69,7 +69,6 @@ export function ModernFilters({
   streams,
   isEpisode,
   isAnime,
-  isCached,
   cachedOnly,
   noneCached,
   onCachedOnly,
@@ -77,7 +76,6 @@ export function ModernFilters({
   streams: ScoredStream[];
   isEpisode: boolean;
   isAnime: boolean;
-  isCached: (s: ScoredStream) => boolean;
   cachedOnly: boolean;
   noneCached: boolean;
   onCachedOnly: (v: boolean) => void;
@@ -109,7 +107,7 @@ export function ModernFilters({
   };
   const narrowed = Object.keys(filters).length > 0 || cachedOnly;
   // No debrid's key is needed in Harbor: an add-on that gathers others can hold it.
-  const cachedUseful = streams.some(isCached);
+  const cachedUseful = streams.some(startsAtOnce);
 
   const showCachedOnly = (on: boolean) => {
     ask();

@@ -58,6 +58,10 @@ export function source(file: string, partial: Partial<ScoredStream> = {}): Score
   };
 }
 
+/** The same sources, cached on a debrid where `which` says so. */
+export const withCached = (streams: ScoredStream[], which: (at: number) => boolean) =>
+  streams.map((s, at): ScoredStream => ({ ...s, cached: which(at) ? { rd: true } : {} }));
+
 /** Draws one part alone inside Harbor's own settings. */
 export async function renderElement(element: ReactNode): Promise<{ unmount: () => Promise<void> }> {
   localStorage.clear();

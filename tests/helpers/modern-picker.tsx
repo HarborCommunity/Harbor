@@ -7,7 +7,7 @@ import type { ModernShellProps } from "../../src/views/play-picker/modern/modern
 import type { ModernState } from "../../src/views/play-picker/modern/modern-state.tsx";
 import { act, FILM } from "./picker-dom.tsx";
 
-export { act, FILM, renderElement, source } from "./picker-dom.tsx";
+export { act, FILM, renderElement, source, withCached } from "./picker-dom.tsx";
 
 // They need the page that picker-dom.tsx makes while they are loaded.
 const { createRoot } = await import("react-dom/client");
@@ -31,11 +31,11 @@ export type Rendered = {
 };
 
 export type LookProps = Partial<ModernListProps> &
-  Partial<Pick<ModernShellProps, "meta" | "isCached">> & { streams: ScoredStream[] };
+  Partial<Pick<ModernShellProps, "meta">> & { streams: ScoredStream[] };
 
 /** Stores settings the way Harbor does, then draws the look inside Harbor's own settings. */
 export async function renderModern(
-  { meta = FILM, isCached = () => false, ...props }: LookProps,
+  { meta = FILM, ...props }: LookProps,
   options: {
     settings?: Record<string, unknown>;
     shell?: Partial<ModernShellProps>;
@@ -91,7 +91,6 @@ export async function renderModern(
     episode: listProps.episode,
     absoluteEpisode: listProps.absoluteEpisode,
     streams: listProps.streams,
-    isCached,
     isAnime: listProps.isAnime,
     pipelineDone: listProps.pipelineDone,
     cachedOnly: false,

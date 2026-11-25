@@ -667,7 +667,7 @@ test("an entry that only opens a web page is external, whatever its text says of
   const streams = aggregatorAnswer("gdrive", RESULTS, "bottom").map(read);
   const said = streams.filter((s) => s.externalUrl && isCached(s));
   assert.equal(said.length, 1, "one has the signs that Harbor reads as cached");
-  const view = await renderModern({ streams, debrids, isCached });
+  const view = await renderModern({ streams, debrids });
   try {
     for (const { name } of NOTICES) {
       assert.equal(cell(rowOf(name), "from"), "AIOStreamsExternal", name);
@@ -680,7 +680,7 @@ test("an entry that only opens a web page is external, whatever its text says of
 
 test("an entry that only opens a web page is no reason to show cached sources only", async () => {
   const streams = [...aggregatorAnswer("gdrive", sources("p2p")), aggregatorNotice(NOTICES[2], 9)];
-  const view = await renderModern({ streams: streams.map(read), debrids, isCached });
+  const view = await renderModern({ streams: streams.map(read), debrids });
   try {
     assert.equal(tally(), "4 sources · 0 ready to start at once");
     const cachedOnly = document.querySelector<HTMLButtonElement>('[role="switch"]')!;
@@ -692,7 +692,7 @@ test("an entry that only opens a web page is no reason to show cached sources on
 
 test("a pick that only opens a web page gives no reason of caches", async () => {
   const pick = notice(2);
-  const view = await renderModern({ streams: [pick], debrids, isCached });
+  const view = await renderModern({ streams: [pick], debrids });
   try {
     assert.equal(why(), null);
   } finally {
@@ -712,7 +712,7 @@ const counts = () => {
 test("numbers in the text of an entry that only opens a web page are no facts of a file", async () => {
   counts();
   const streams = aggregatorAnswer("gdrive", RESULTS, "top").map(read);
-  const view = await renderModern({ streams, preferred: streams[4], debrids, isCached });
+  const view = await renderModern({ streams, preferred: streams[4], debrids });
   try {
     const row = rowOf("🧹 Left out");
     const words = [...row.querySelectorAll("[data-words] > *")].map((line) => line.textContent);
@@ -822,7 +822,7 @@ test("an entry that only opens a web page is not the pick while there is somethi
 
 test("with notices on top and nothing ready the pick is a source to play", async () => {
   const streams = aggregatorAnswer("gdrive", sources("p2p"), "top").map(read);
-  const view = await renderModern({ streams, debrids, isCached });
+  const view = await renderModern({ streams, debrids });
   try {
     assert.equal(sentence(), "Harbor's pick is OARLOCK in 1080p, 7.70 GB.");
     assert.match(rowOf("OARLOCK").textContent!, /Harbor's pick/);

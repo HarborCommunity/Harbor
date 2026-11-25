@@ -13,6 +13,7 @@ import {
   pointer,
   renderModern,
   source,
+  withCached,
   type LookProps,
   type Rendered,
 } from "./helpers/modern-picker.tsx";
@@ -620,10 +621,10 @@ test("a source that waits for a held list does not change the order that is name
 });
 
 test("Cached only and the source mode apply at once, also to a held list", async () => {
-  const streams = four();
+  const streams = withCached(four(), (i) => i === 1);
   const cached = [streams[1]];
   const view = await renderModern(
-    { streams, isCached: (s) => s === streams[1], debrids: debrids(RD) },
+    { streams, debrids: debrids(RD) },
     {
       shell: { onCachedOnly: () => void view.rerender({ streams: cached }, { cachedOnly: true }) },
     },

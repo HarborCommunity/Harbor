@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { bidiIsolate } from "@/lib/bidi";
 import type { Meta } from "@/lib/cinemeta";
 import { useT } from "@/lib/i18n";
@@ -9,7 +9,7 @@ import { runtimeMs } from "@/lib/voyage/progress";
 import { CollapsibleOverview, pickerEpisode, pickerFilmLine } from "../picker-header";
 import { useModernContext } from "./modern-context";
 import { ModernFilters } from "./modern-filters";
-import { applyModernFilters, opensPage } from "./modern-rules";
+import { applyModernFilters, startsAtOnce } from "./modern-rules";
 import { useModernState } from "./modern-state";
 
 export function ModernSide({
@@ -17,7 +17,6 @@ export function ModernSide({
   episode,
   absoluteEpisode,
   streams,
-  isCached,
   isAnime,
   pipelineDone,
   cachedOnly,
@@ -28,7 +27,6 @@ export function ModernSide({
   episode?: PlayEpisode;
   absoluteEpisode?: number | null;
   streams: ScoredStream[];
-  isCached: (s: ScoredStream) => boolean;
   isAnime: boolean;
   pipelineDone: boolean;
   cachedOnly: boolean;
@@ -36,7 +34,6 @@ export function ModernSide({
   onCachedOnly: (v: boolean) => void;
 }) {
   const t = useT();
-  const startsAtOnce = useCallback((s: ScoredStream) => isCached(s) && !opensPage(s), [isCached]);
   const widePicture = episode?.still || meta.background || null;
   const picture = widePicture || meta.poster || null;
   const logo = (widePicture && meta.logo) || null;
@@ -108,7 +105,6 @@ export function ModernSide({
           isEpisode={!!episode}
           isAnime={isAnime}
           noneCached={noneCached}
-          isCached={startsAtOnce}
           pipelineDone={pipelineDone}
         />
         {episode?.overview && (
@@ -121,7 +117,6 @@ export function ModernSide({
         streams={streams}
         isEpisode={!!episode}
         isAnime={isAnime}
-        isCached={startsAtOnce}
         cachedOnly={cachedOnly}
         noneCached={noneCached}
         onCachedOnly={onCachedOnly}
@@ -136,7 +131,6 @@ function Tally({
   isEpisode,
   isAnime,
   noneCached,
-  isCached,
   pipelineDone,
 }: {
   minutes: number;
@@ -144,7 +138,6 @@ function Tally({
   isEpisode: boolean;
   isAnime: boolean;
   noneCached: boolean;
-  isCached: (s: ScoredStream) => boolean;
   pipelineDone: boolean;
 }) {
   const t = useT();
@@ -154,7 +147,7 @@ function Tally({
     () => applyModernFilters(streams, filters, ctx),
     [streams, filters, ctx],
   );
-  const ready = useMemo(() => matching.filter(isCached).length, [matching, isCached]);
+  const ready = useMemo(() => matching.filter(startsAtOnce).length, [matching]);
 
   const total = streams.length;
   const filtered = Object.keys(filters).length > 0;
