@@ -24,6 +24,10 @@ export function SubtitlesLanguageTab() {
       <LocalSubtitlesSection
         folder={settings.localSubtitleFolder}
         onChange={(folder) => update({ localSubtitleFolder: folder })}
+        toastPosition={settings.localSubtitleToastPosition}
+        onToastPositionChange={(localSubtitleToastPosition) =>
+          update({ localSubtitleToastPosition })
+        }
       />
 
       <Section

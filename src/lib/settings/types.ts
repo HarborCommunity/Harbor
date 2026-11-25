@@ -6,6 +6,7 @@ import type { SourceRow } from "@/lib/custom-sources";
 import type { CustomStreamFilter } from "@/lib/streams/custom-filters";
 import type { SourceSort } from "@/lib/streams/source-sort";
 import type { SyncIndicatorPosition } from "@/lib/sync-toast-position";
+import type { ToastPosition } from "@/lib/toast-position";
 import type { FullscreenClockFormat, FullscreenClockStyle } from "@/lib/local-time";
 import type { SubtitleOffsetPosition, SubtitleOffsetSize } from "@/lib/player/subtitle-offset";
 import type { BufferSizeId } from "@/lib/player/buffer-profile";
@@ -401,6 +402,7 @@ export type Settings = {
   mangaUpscaleAutoDownload: boolean;
   preferredSubLangs: string[];
   localSubtitleFolder: string;
+  localSubtitleToastPosition: ToastPosition;
   preferredAudioLangs: string[];
   subFontSize: number;
   subFontColor: string;

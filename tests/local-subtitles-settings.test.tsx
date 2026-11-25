@@ -6,6 +6,7 @@ import { JSDOM } from "jsdom";
 import { act, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { LANGUAGES } from "../src/lib/i18n/languages";
+import type { ToastPosition } from "../src/lib/toast-position";
 
 test("the desktop subtitle folder can be chosen, kept on cancel or error, and cleared", async () => {
   const dom = new JSDOM('<div id="root"></div>', { url: "http://localhost" });
@@ -24,6 +25,7 @@ test("the desktop subtitle folder can be chosen, kept on cancel or error, and cl
   const root = createRoot(document.getElementById("root")!);
   let selection: string | null | Error = "/home/viewer/字幕";
   const options: Array<{ directory: boolean; recursive: boolean; defaultPath?: string }> = [];
+  Object.defineProperty(dom.window.HTMLElement.prototype, "animate", { value: () => {} });
   Object.defineProperties(dom.window, {
     __TAURI_OS_PLUGIN_INTERNALS__: { value: { platform: "linux" } },
     __TAURI_INTERNALS__: {
@@ -68,10 +70,23 @@ test("the desktop subtitle folder can be chosen, kept on cancel or error, and cl
       );
     function Fixture() {
       const [folder, setFolder] = useState("");
-      return <LocalSubtitlesSection folder={folder} onChange={setFolder} />;
+      const [toastPosition, setToastPosition] = useState<ToastPosition>("top");
+      return (
+        <LocalSubtitlesSection
+          folder={folder}
+          onChange={setFolder}
+          toastPosition={toastPosition}
+          onToastPositionChange={setToastPosition}
+        />
+      );
     }
     await act(async () => root.render(<Fixture />));
     assert.match(section().textContent!, /No folder selected/);
+    assert.equal(section().querySelector('[aria-pressed="true"]')?.textContent, "Top");
+    for (const position of ["Center", "Top left", "Top right", "Top"]) {
+      await click(position);
+      assert.equal(section().querySelector('[aria-pressed="true"]')?.textContent, position);
+    }
 
     await click("Choose folder");
     assert.equal(section().querySelector("bdi")?.textContent, "/home/viewer/字幕");

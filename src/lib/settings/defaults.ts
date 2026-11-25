@@ -324,6 +324,7 @@ export const DEFAULT: Settings = {
   mangaUpscaleAutoDownload: true,
   preferredSubLangs: ["English"],
   localSubtitleFolder: "",
+  localSubtitleToastPosition: "top",
   preferredAudioLangs: ["English", "Japanese"],
   subFontSize: 32,
   subFontColor: "#FFFFFF",

@@ -157,7 +157,11 @@ export function useLocalSubtitleAutoload(params: {
         if ((!loaded || !active) && localSubRef.current === candidate) localSubRef.current = null;
         if (!active) return;
         if (!loaded) continue;
-        emitListToast(t("Loaded {name}", { name: match.title }));
+        emitListToast(
+          t("Loaded {name}", { name: match.title }),
+          "success",
+          settingsRef.current.localSubtitleToastPosition,
+        );
         return;
       }
       if (candidates.length > 0 && isActive()) {

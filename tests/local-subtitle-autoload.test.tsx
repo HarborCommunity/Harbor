@@ -104,6 +104,7 @@ function subtitlePlayer(
     snap: defaults.snap,
     localSelection: () => localSelection?.current,
     notification: () => document.querySelector("[role='status']")?.textContent,
+    notificationClasses: () => document.querySelector("[role='status']")?.classList,
     pickManually: () => {
       automatic = false;
     },
@@ -263,8 +264,16 @@ test("selects an untagged anime subtitle over embedded English and confirms the 
   ]);
   assert.equal(player.notification(), undefined);
 
+  await player.render({
+    src,
+    snap,
+    settings: { ...player.settings, localSubtitleToastPosition: "top-right" },
+  });
+  assert.equal(player.bridge.addSubtitle.mock.callCount(), 1);
+
   await act(async () => load.resolve(true));
   assert.equal(player.notification(), `Loaded ${title}`);
+  assert.ok(player.notificationClasses()?.contains("right-6"));
   assert.equal(player.localSelection()?.pending, true);
 
   await player.render({

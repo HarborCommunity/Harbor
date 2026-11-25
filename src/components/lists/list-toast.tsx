@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 
 import { Avatar } from "@/components/together-modal/avatar";
 import type { Participant } from "@/lib/together/protocol";
+import type { ToastPosition } from "@/lib/toast-position";
 
 type ListenerAvatar = Pick<Participant, "name" | "avatar" | "color">;
 type Toast = {
@@ -12,6 +13,14 @@ type Toast = {
   tone: "success" | "error";
   listener?: ListenerAvatar;
   position: "center" | "right";
+  overlayPosition?: ToastPosition;
+};
+
+const POSITION_CLASSES: Record<ToastPosition, string> = {
+  center: "inset-0 flex items-center justify-center px-6",
+  top: "inset-x-0 top-16 flex justify-center px-6",
+  "top-left": "left-6 top-16",
+  "top-right": "right-6 top-16",
 };
 
 const listeners = new Set<(t: Toast) => void>();
@@ -22,8 +31,12 @@ function showToast(toast: Omit<Toast, "id">): void {
   for (const fn of listeners) fn(next);
 }
 
-export function emitListToast(text: string, tone: Toast["tone"] = "success"): void {
-  showToast({ text, tone, position: "center" });
+export function emitListToast(
+  text: string,
+  tone: Toast["tone"] = "success",
+  overlayPosition?: ToastPosition,
+): void {
+  showToast({ text, tone, position: "center", overlayPosition });
 }
 
 export function emitListenAlongToast(
@@ -52,16 +65,26 @@ export function ListToastHost() {
   }, []);
 
   if (!toast) return null;
+  const placement = toast.overlayPosition ? POSITION_CLASSES[toast.overlayPosition] : undefined;
+  const defaultPlacement =
+    toast.position === "right" ? "right-4 max-w-[calc(100%-2rem)]" : "left-1/2 -translate-x-1/2";
 
   return createPortal(
     <div
       role={toast.tone === "error" ? "alert" : "status"}
-      style={{
-        bottom: "calc(1.5rem + var(--harbor-music-dock, 0px) + var(--harbor-viewport-bottom, 0px))",
-      }}
-      className={`pointer-events-none fixed bottom-6 z-[260] animate-popover-in ${toast.position === "right" ? "right-4 max-w-[calc(100%-2rem)]" : "left-1/2 -translate-x-1/2"}`}
+      style={
+        placement
+          ? undefined
+          : {
+              bottom:
+                "calc(1.5rem + var(--harbor-music-dock, 0px) + var(--harbor-viewport-bottom, 0px))",
+            }
+      }
+      className={`pointer-events-none fixed z-[260] ${placement ?? `bottom-6 animate-popover-in ${defaultPlacement}`}`}
     >
-      <div className="pointer-events-auto flex items-center gap-2.5 rounded-full border border-edge-soft bg-elevated/95 py-1.5 ps-1.5 pe-4 shadow-[0_18px_50px_-20px_rgba(0,0,0,0.7)] backdrop-blur-md">
+      <div
+        className={`pointer-events-auto flex items-center gap-2.5 rounded-full border border-edge-soft bg-elevated/95 py-1.5 ps-1.5 pe-4 shadow-[0_18px_50px_-20px_rgba(0,0,0,0.7)] backdrop-blur-md ${placement ? "max-w-[calc(100vw-3rem)] animate-popover-in" : ""}`}
+      >
         {toast.listener ? (
           <span aria-hidden="true" className="shrink-0">
             <Avatar
@@ -83,7 +106,11 @@ export function ListToastHost() {
             )}
           </span>
         )}
-        <span className="text-[12.5px] font-medium text-ink">{toast.text}</span>
+        <span
+          className={`text-[12.5px] font-medium text-ink ${placement ? "min-w-0 [overflow-wrap:anywhere]" : ""}`}
+        >
+          {toast.text}
+        </span>
       </div>
     </div>,
     document.body,

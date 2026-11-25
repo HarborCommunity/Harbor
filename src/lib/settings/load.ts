@@ -566,6 +566,12 @@ export function parseStoredSettings(raw: string | null): {
         typeof parsed.localSubtitleFolder === "string"
           ? parsed.localSubtitleFolder
           : DEFAULT.localSubtitleFolder,
+      localSubtitleToastPosition:
+        parsed.localSubtitleToastPosition === "center" ||
+        parsed.localSubtitleToastPosition === "top-left" ||
+        parsed.localSubtitleToastPosition === "top-right"
+          ? parsed.localSubtitleToastPosition
+          : DEFAULT.localSubtitleToastPosition,
       preferredAudioLangs: (parsed.preferredAudioLangs ?? DEFAULT.preferredAudioLangs).map((lang) =>
         lang === ORIGINAL_AUDIO_LANG ? lang : languageName(lang),
       ),

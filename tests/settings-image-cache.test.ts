@@ -131,6 +131,18 @@ test("stored local subtitle folders preserve exact paths and reject non-string v
   }
 });
 
+test("stored local subtitle pop-up positions preserve supported values and default to top", () => {
+  const f = fixture();
+  for (const value of ["center", "top", "top-left", "top-right"]) {
+    f.data.set("harbor.settings", f.complete({ localSubtitleToastPosition: value }));
+    assert.equal(f.settings.loadStoredSettings().localSubtitleToastPosition, value);
+  }
+  for (const value of [undefined, null, 10, "bottom-left"]) {
+    f.data.set("harbor.settings", f.complete({ localSubtitleToastPosition: value }));
+    assert.equal(f.settings.loadStoredSettings().localSubtitleToastPosition, "top");
+  }
+});
+
 test("unchanged self-contained settings and image priorities reuse their cached values", () => {
   const f = fixture();
   f.data.set("harbor.settings", f.complete({ tmdbImageLangs: ["Arabic", "Original", "English"] }));

@@ -2,16 +2,28 @@ import { useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useT } from "@/lib/i18n";
 import { osClass } from "@/lib/platform";
+import { TOAST_POSITIONS, type ToastPosition } from "@/lib/toast-position";
 import { SettingRow } from "../kit";
-import { Section, settingsAnchor } from "../shared";
+import { Section, Segmented, settingsAnchor } from "../shared";
 import { SButton } from "../ui";
+
+const POSITION_LABELS = {
+  center: "Center",
+  top: "Top",
+  "top-left": "Top left",
+  "top-right": "Top right",
+} as const;
 
 export function LocalSubtitlesSection({
   folder,
   onChange,
+  toastPosition,
+  onToastPositionChange,
 }: {
   folder: string;
   onChange: (folder: string) => void;
+  toastPosition: ToastPosition;
+  onToastPositionChange: (position: ToastPosition) => void;
 }) {
   const t = useT();
   const [picking, setPicking] = useState(false);
@@ -74,6 +86,15 @@ export function LocalSubtitlesSection({
         <p role="alert" className="px-4 pb-3 text-[15px] text-danger">
           {t("Could not open the folder picker. Try again.")}
         </p>
+      )}
+      {available && (
+        <SettingRow wide label={t("Pop-up position")}>
+          <Segmented
+            value={toastPosition}
+            options={TOAST_POSITIONS.map((value) => ({ value, label: t(POSITION_LABELS[value]) }))}
+            onChange={onToastPositionChange}
+          />
+        </SettingRow>
       )}
     </Section>
   );
