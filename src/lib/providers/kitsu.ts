@@ -22,6 +22,7 @@ type KitsuAnimeAttrs = {
   slug?: string;
   canonicalTitle?: string;
   titles?: { en?: string; en_jp?: string; ja_jp?: string };
+  abbreviatedTitles?: string[];
   synopsis?: string;
   description?: string;
   posterImage?: Img | null;
@@ -353,9 +354,7 @@ export async function kitsuAnime(
     id: Number(j.data.id),
     slug: a.slug ?? "",
     title: a.titles?.en || a.canonicalTitle || a.titles?.en_jp || "Unknown",
-    altTitles: [a.titles?.en, a.titles?.en_jp, a.titles?.ja_jp, a.canonicalTitle].filter(
-      (t): t is string => !!t,
-    ),
+    altTitles: kitsuTitles(a),
     synopsis: a.synopsis || a.description || "",
     poster: pickPoster(a.posterImage),
     backdrop: pickImg(a.coverImage),
@@ -378,11 +377,22 @@ export async function kitsuAnime(
   };
 }
 
+function kitsuTitles(a: KitsuAnimeAttrs): string[] {
+  return [
+    ...new Set(
+      [a.canonicalTitle, ...Object.values(a.titles ?? {}), ...(a.abbreviatedTitles ?? [])].filter(
+        (title): title is string => typeof title === "string" && !!title.trim(),
+      ),
+    ),
+  ];
+}
+
 function attrsToMeta(id: string, a: KitsuAnimeAttrs): Meta {
   return {
     id: `kitsu:${id}`,
     type: a.subtype === "movie" ? "movie" : "series",
     name: a.titles?.en || a.canonicalTitle || a.titles?.en_jp || "Unknown",
+    alternateTitles: kitsuTitles(a),
     poster: pickPoster(a.posterImage),
     background: pickImg(a.coverImage),
     description: a.synopsis || a.description || "",
@@ -625,16 +635,7 @@ export async function kitsuRelated(id: number, identity = false): Promise<KitsuR
     const at = a.attributes;
     out.push({
       role: rel.attributes.role || "related",
-      meta: {
-        id: `kitsu:${a.id}`,
-        type: at.subtype === "movie" ? "movie" : "series",
-        name: at.titles?.en || at.canonicalTitle || at.titles?.en_jp || "Unknown",
-        poster: pickPoster(at.posterImage),
-        background: pickImg(at.coverImage),
-        description: at.synopsis || at.description || "",
-        releaseInfo: at.startDate ? at.startDate.slice(0, 4) : undefined,
-        imdbRating: ratingToTen(at.averageRating),
-      },
+      meta: attrsToMeta(a.id, at),
     });
   }
   return out;

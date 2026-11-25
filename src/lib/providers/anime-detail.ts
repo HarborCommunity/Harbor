@@ -160,6 +160,7 @@ function makeFranchiseMeta(id: number, anime: import("./kitsu").KitsuAnimeDetail
     id: `kitsu:${id}`,
     type: anime.subtype === "movie" ? "movie" : "series",
     name: anime.title,
+    alternateTitles: anime.altTitles,
     poster: anime.poster,
     background: anime.backdrop,
     description: anime.synopsis,

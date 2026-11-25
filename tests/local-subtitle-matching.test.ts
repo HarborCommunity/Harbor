@@ -6,6 +6,84 @@ import { findMatchingSubtitles } from "../src/lib/subtitles/local-subtitle-match
 
 const show = { title: "Dark", season: 2, episode: 3 };
 
+test("matches translated anime titles through provider aliases and the resolved release", () => {
+  const root = "/subs";
+  const anime = `${root}/[Crunchyroll] Watashi wo Tabetai, Hitodenashi - 02.ass`;
+  const wrongEpisode = `${root}/[Crunchyroll] Watashi wo Tabetai, Hitodenashi - 01.ass`;
+  const media = {
+    title: "This Monster Wants to Eat Me",
+    mediaType: "anime" as const,
+    season: 1,
+    episode: 2,
+  };
+  const files = [wrongEpisode, anime];
+  assert.deepEqual(
+    findMatchingSubtitles(files, { ...media, alternateTitles: ["Watashi o Tabetai, Hitodenashi"] }),
+    [{ path: anime }],
+  );
+  assert.deepEqual(
+    findMatchingSubtitles(files, {
+      ...media,
+      releaseFilename: "[SubsPlease] Watashi wo Tabetai, Hitodenashi - 02 (1080p).mkv",
+    }),
+    [{ path: anime }],
+  );
+  assert.deepEqual(
+    findMatchingSubtitles(files, {
+      ...media,
+      releaseFilename: "[SubsPlease] Watashi wo Tabetai, Hitodenashi - 01 (1080p).mkv",
+    }),
+    [],
+  );
+});
+
+test("release aliases require the correct season, episode, or movie year", () => {
+  const tv = "/subs/Der.Palast.S02E03.en.srt";
+  const movie = "/subs/Il.Viaggio.2024.ar.srt";
+  const files = [tv, movie, "/subs/Il.Viaggio.2019.ar.srt", "/subs/Episode.S02E03.en.srt"];
+  assert.deepEqual(
+    findMatchingSubtitles(files, {
+      ...show,
+      title: "The Palace",
+      releaseFilename: "Der.Palast.S02E03.WEB-DL.mkv",
+    }),
+    [{ path: tv, language: "en" }],
+  );
+  for (const releaseFilename of [
+    "Der.Palast.S01E03.mkv",
+    "Der.Palast.S02E03E04.mkv",
+    "Episode.S02E03.mkv",
+  ]) {
+    assert.deepEqual(
+      findMatchingSubtitles(files, { ...show, title: "The Palace", releaseFilename }),
+      [],
+    );
+  }
+  const film = { title: "The Journey", year: 2024, mediaType: "movie" as const };
+  assert.deepEqual(
+    findMatchingSubtitles(files, { ...film, releaseFilename: "Il.Viaggio.2024.1080p.mkv" }),
+    [{ path: movie, language: "ar" }],
+  );
+  assert.deepEqual(
+    findMatchingSubtitles(files, { ...film, releaseFilename: "Il.Viaggio.2019.mkv" }),
+    [],
+  );
+});
+
+test("matches a movie subtitle with a release label and spelled-out ampersand", () => {
+  const movie =
+    "/subs/[Nazo] Trinity Seven Movie - Eternity Library and Alchemic Girl [BD][DameDesuYo].ass";
+  const episode = "/subs/[Zero-Kon] Trinity Seven - 02 [BD][DameDesuYo].ass";
+  assert.deepEqual(
+    findMatchingSubtitles([episode, movie], {
+      title: "Trinity Seven: Eternity Library & Alchemic Girl",
+      year: 2017,
+      mediaType: "movie",
+    }),
+    [{ path: movie }],
+  );
+});
+
 test("matches extracted SubSource season packs with Romanized filenames", () => {
   const root = "C:\\Subtitles";
   const pack = (season: number, file: string, slug = "re-zero") =>

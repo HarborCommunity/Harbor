@@ -1,8 +1,10 @@
 import { isKnownLanguage, langScore, normalizeLang } from "./language";
+import { isPlayableVideoPath, stripPlayableVideoExtension } from "@/lib/media-file";
 
 export type LocalSubtitleMedia = {
   title: string;
   alternateTitles?: readonly string[];
+  releaseFilename?: string;
   year?: number;
   season?: number;
   episode?: number;
@@ -22,6 +24,8 @@ type FolderEvidence = {
 type SubtitleEvidence = { suffix: string; confidence: number };
 
 const SUBTITLE_EXT = /\.(?:ass|srt|ssa|vtt|sub)$/i;
+const RELEASE_GROUPS = /^(?:(?:\[[^\]]+\]|【[^】]+】)\s*)+/;
+const MOVIE_LABEL = /(?<=[\p{L}\p{N}])[ ._-]+movie[ ._]*[-:][ ._-]*(?=\p{L})/u;
 const SEPARATORS = /^[^\p{L}\p{N}\p{M}]+/u;
 const YEAR = /^((?:18|19|20)\d{2})(?![\p{L}\p{N}])/u;
 const SEASON_FOLDER =
@@ -41,7 +45,7 @@ const EPISODE =
   /^(?:(?:e(?:p(?:isode)?)?[ ._-]*)?(\d{1,4})(?:v\d+)?|第[ ._-]*(\d{1,4})[ ._-]*[話话集])(?=$|[^\p{L}\p{N}])/u;
 const MULTI_EPISODE = /^(?:[ ._]*-[ ._-]*e?\d{1,4}|[ ._-]*e\d{1,4})(?![\p{L}\p{N}])/u;
 const RELEASE_SUFFIX =
-  /^(?:\d{3,4}[pi]|4k|uhd|blu[ ._-]?ray|[bd]r[ ._-]?rip|bd[ ._-]?rip|remux|web(?:[ ._-]?(?:dl|rip))?|hdtv|dvd(?:[ ._-]?rip)?|proper|repack|[hx][ ._-]?26[45]|hevc|av1|hdr(?:10)?)(?=$|[^\p{L}\p{N}])/u;
+  /^(?:\d{3,4}[pi]|4k|uhd|blu[ ._-]?ray|bd|[bd]r[ ._-]?rip|bd[ ._-]?rip|remux|web(?:[ ._-]?(?:dl|rip))?|hdtv|dvd(?:[ ._-]?rip)?|proper|repack|[hx][ ._-]?26[45]|hevc|av1|hdr(?:10)?)(?=$|[^\p{L}\p{N}])/u;
 const SUBTITLE_FLAGS = /^(?:forced|signs|sdh|cc)$/;
 const GENERIC_SUBTITLE = /^(?:subtitles?|subs?)(?=$|[^\p{L}\p{N}])/u;
 const FORCED_TAG = /(?<![\p{L}\p{N}])forced(?![\p{L}\p{N}])/gu;
@@ -63,6 +67,7 @@ function titlePatterns(media: LocalSubtitleMedia): RegExp[] {
   for (const title of [media.title, ...(media.alternateTitles ?? [])]) {
     const folded = foldName(title.replace(/(\p{Ll})(\p{Lu})/gu, "$1 $2"));
     titles.add(folded);
+    if (folded.includes("&")) titles.add(folded.replace(/&/g, " and "));
     if (media.mediaType !== "movie" && media.episode != null) {
       titles.add(folded.replace(SEASON_SUFFIX, ""));
     }
@@ -76,7 +81,13 @@ function titlePatterns(media: LocalSubtitleMedia): RegExp[] {
   return ordered.flatMap((title) => {
     const tokens = title.match(/[\p{L}\p{N}\p{M}]+/gu);
     if (!tokens) return [];
-    const pattern = tokens.join("[^\\p{L}\\p{N}\\p{M}]*");
+    const pattern = tokens
+      .map((token, i) =>
+        media.mediaType === "anime" && i > 0 && i < tokens.length - 1 && /^(?:o|wo)$/.test(token)
+          ? "(?:o|wo)"
+          : token,
+      )
+      .join("[^\\p{L}\\p{N}\\p{M}]*");
     return [new RegExp(`^${pattern}(?=$|[^\\p{L}\\p{N}\\p{M}]|第 *\\d+[話话集])`, "u")];
   });
 }
@@ -84,7 +95,7 @@ function titlePatterns(media: LocalSubtitleMedia): RegExp[] {
 function matchTitle(name: string, patterns: readonly RegExp[]): TitleMatch | undefined {
   // A release-group tag can prefix the title. Try the original first for
   // titles whose own spelling starts with a bracket.
-  const untagged = name.replace(/^(?:(?:\[[^\]]+\]|【[^】]+】)\s*)+/, "");
+  const untagged = name.replace(RELEASE_GROUPS, "");
   for (const candidate of [name, untagged]) {
     const body = candidate.replace(SEPARATORS, "");
     for (const pattern of patterns) {
@@ -167,6 +178,51 @@ function packEpisode(name: string): ReturnType<typeof episodeMatch> {
   if (markers.length !== 1) return;
   const episode = episodeMatch(trimmed.slice(markers[0].index));
   if (episode?.season != null) return episode;
+}
+
+function releaseTitle(media: LocalSubtitleMedia, movie: boolean): string | undefined {
+  const filename = media.releaseFilename?.split(/[\\/]/).pop();
+  if (!filename || filename.length > 512 || !isPlayableVideoPath(filename)) return;
+  const stem = foldName(stripPlayableVideoExtension(filename)).replace(RELEASE_GROUPS, "");
+  const episodeMarkers = [...stem.matchAll(/[ ._-]+(?=(?:s(?:eason)?[ ._-]*\d+|\d+x\d+))/gu)];
+  const episode = episodeMarkers
+    .map((marker) => ({
+      index: marker.index,
+      match: episodeMatch(stem.slice(marker.index + marker[0].length)),
+    }))
+    .find(({ match }) => match?.season != null);
+
+  let title: string | undefined;
+  if (movie) {
+    if (episode || media.year == null) return;
+    const years = [...stem.matchAll(/[ ._(-]+((?:18|19|20)\d{2})(?=$|[^\p{L}\p{N}])/gu)];
+    const year = years.at(-1);
+    if (year && Number(year[1]) === media.year) title = stem.slice(0, year.index);
+  } else if (episode) {
+    if (episode.match?.season === (media.season ?? 1) && episode.match?.episode === media.episode) {
+      title = stem.slice(0, episode.index);
+    }
+  } else if (media.mediaType === "anime") {
+    const dash = /[ ._]+-[ ._]+(?=\d)/u.exec(stem);
+    const relative = dash && episodeMatch(stem.slice(dash.index + dash[0].length));
+    if (
+      dash &&
+      relative &&
+      relative.season == null &&
+      (((media.season ?? 1) === 1 && relative.episode === media.episode) ||
+        relative.episode === media.absoluteNumber)
+    )
+      title = stem.slice(0, dash.index);
+  }
+  if (
+    !title ||
+    (title.match(/\p{L}/gu)?.length ?? 0) < 3 ||
+    /^(?:episode|movie|video|film|file|sample|title|track|part|chapter|season|unknown|main|stream|untitled)$/u.test(
+      title,
+    )
+  )
+    return;
+  return title;
 }
 
 function subtitlePack(name: string, titles: readonly RegExp[]) {
@@ -303,6 +359,29 @@ export function findMatchingSubtitles(
 ): LocalSubtitleMatch[] {
   const movie = media.mediaType === "movie" || (media.mediaType == null && media.episode == null);
   if (!movie && media.episode == null) return [];
+  const primary = matchSubtitles(files, media, preferredLanguages, rootFolder, options, movie);
+  if (primary.length) return primary;
+  const title = releaseTitle(media, movie);
+  return title
+    ? matchSubtitles(
+        files,
+        { ...media, title, alternateTitles: [] },
+        preferredLanguages,
+        rootFolder,
+        options,
+        movie,
+      )
+    : [];
+}
+
+function matchSubtitles(
+  files: readonly string[],
+  media: LocalSubtitleMedia,
+  preferredLanguages: readonly string[],
+  rootFolder: string | undefined,
+  options: { includeOtherLanguages?: boolean } | undefined,
+  movie: boolean,
+): LocalSubtitleMatch[] {
   const titles = titlePatterns(media);
   if (!titles.length) return [];
   const preferred = preferredLanguages.filter((language) => normalizeLang(language));
@@ -315,7 +394,11 @@ export function findMatchingSubtitles(
     const filename = parts.pop();
     if (!filename || !SUBTITLE_EXT.test(filename)) continue;
     const name = foldName(filename.replace(SUBTITLE_EXT, ""));
-    const fileTitle = matchTitle(name, titles);
+    const fileTitle =
+      matchTitle(name, titles) ??
+      (movie
+        ? matchTitle(name.replace(MOVIE_LABEL, " ").replace(/&/g, " and "), titles)
+        : undefined);
     const folders = parts
       .slice(rootParts ? Math.max(0, rootParts.length - 1) : 0)
       .reverse()

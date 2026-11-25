@@ -1,4 +1,5 @@
 import { releaseYear } from "@/lib/release-info";
+import { metaIsAnime } from "@/lib/player/anime-src";
 import type { TrackInfo } from "@/lib/player/bridge";
 import type { PlayerSrc } from "@/lib/view";
 import { langScore } from "./language";
@@ -15,12 +16,9 @@ export function localSubtitleMedia(src: PlayerSrc): LocalSubtitleMedia | null {
   const { meta, episode } = src;
   const title = meta.name;
   const alternateTitles = meta.alternateTitles;
+  const releaseFilename = src.streamRef?.resolvedFilename ?? undefined;
   if (episode) {
-    const anime =
-      src.isAnime ||
-      meta.type === "anime" ||
-      /^(kitsu|mal):/.test(meta.id) ||
-      meta.genres?.some((genre) => genre.toLowerCase() === "anime");
+    const anime = src.isAnime || meta.type === "anime" || metaIsAnime(meta);
     const { imdbSeason, imdbEpisode } = episode;
     const mapped =
       imdbSeason != null &&
@@ -39,6 +37,7 @@ export function localSubtitleMedia(src: PlayerSrc): LocalSubtitleMedia | null {
     return {
       mediaType: anime ? "anime" : "series",
       title,
+      releaseFilename,
       alternateTitles: partAliases.length
         ? [...(alternateTitles ?? []), ...partAliases]
         : alternateTitles,
@@ -54,7 +53,7 @@ export function localSubtitleMedia(src: PlayerSrc): LocalSubtitleMedia | null {
     releaseYear(meta.releaseInfo),
     meta.listingYear,
   ].find((value) => value != null && Number.isInteger(value) && value >= 1800 && value <= 2099);
-  return { mediaType: "movie", title, alternateTitles, year };
+  return { mediaType: "movie", title, alternateTitles, year, releaseFilename };
 }
 
 export function localSubtitleTakesPrecedence(
