@@ -519,11 +519,18 @@ const KINDS: readonly Kind[] = [
   ["FETCHED", { name: "[RD download] Made-up", ...hash() }, "Not cached yet", "Debrid"],
   ["TORRENT", hash(), "Not cached yet", "P2P"],
   ["QUEUED", hash(), "Queued on TorBox", "P2P"],
+  // What only opens a web page is never cached, not even where its text names a debrid.
   [
     "PAGE",
     { name: "⚡ 24 ready ✅", title: undefined, externalUrl: "https://made-up.test/page" },
     "External",
     "Debrid",
+  ],
+  [
+    "SIGNPOST",
+    { name: "[TB+] SIGNPOST", title: undefined, externalUrl: "https://made-up.test/signpost" },
+    "External",
+    "Cached",
   ],
 ];
 const kinds = () => KINDS.map(([group, stream, , , known]) => read(group, stream, known));
@@ -554,6 +561,45 @@ test("a source that its add-on calls cached is found under Availability, Cached"
       assert.ok(rows().map(groupOf).includes(group), `the row of ${group} says "Cached"`);
     }
   }));
+
+test("a plain link is counted, kept and found as cached, and its row says nothing of it", () =>
+  inPage([read("PLAIN", at("plain")), read("TORRENT", hash())], { debrids: KEYS }, async (page) => {
+    assert.deepEqual(rows().map(availability), ["", "Not cached yet"]);
+    assert.equal(says("[data-tally]"), "2 sources · 1 ready to start at once", "counted");
+
+    await act(() => button("More filters")!.click());
+    assert.deepEqual([...choices()].slice(1), [
+      ["Cached", 1],
+      ["P2P", 1],
+    ]);
+    await page.filter("availability", "Cached");
+    assert.deepEqual(rows().map(groupOf), ["PLAIN"], "found");
+    assert.deepEqual(rows().map(availability), [""]);
+    await page.filter("availability", null);
+
+    await act(() => cachedOnly().click());
+    assert.deepEqual(rows().map(groupOf), ["PLAIN"], "kept");
+    assert.deepEqual(rows().map(availability), [""]);
+  }));
+
+test("a web page is under no choice of Availability, whatever its text says", () => {
+  const sent = kinds();
+  const pages = groupsOf(([, stream]) => !!stream.externalUrl);
+  const shown = () => pages.filter((group) => rows().map(groupOf).includes(group));
+  const signs = sent.filter((_, i) => pages.includes(KINDS[i][0])).map((s) => s.cached);
+  assert.deepEqual(signs, [{}, { tb: true }], "what Harbor reads in their texts");
+  return inPage(sent, { debrids: KEYS }, async (page) => {
+    assert.deepEqual(shown(), pages);
+    await act(() => button("More filters")!.click());
+    for (const value of ["Cached", "Debrid", "P2P"]) {
+      await page.filter("availability", value);
+      assert.deepEqual(shown(), [], value);
+    }
+    await page.filter("availability", null);
+    await act(() => cachedOnly().click());
+    assert.deepEqual(shown(), [], "Cached only");
+  });
+});
 
 test("the rows, the count, Cached only and the Availability filter mean the same by cached", async () => {
   for (const keys of [KEYS, debrids(RD), debrids()]) {
@@ -657,8 +703,9 @@ test("the words name a debrid with a key, whoever calls the source cached on it"
 test("the Stremio look, Big Picture and the page's own test call cached what they did", () => {
   const sent = kinds();
   const dim = FACET_DIMS.find(({ key }) => key === "cached")!;
-  const badged = [...READY.filter((group) => !/SHELVED|PLAIN/.test(group)), "PAGE"];
-  const onPage = [...READY.filter((group) => !/ELSEWHERE|CLOCKED/.test(group)), "EMPTY", "PAGE"];
+  const pages = ["PAGE", "SIGNPOST"];
+  const badged = [...READY.filter((group) => !/SHELVED|PLAIN/.test(group)), ...pages];
+  const onPage = [...READY.filter((group) => !/ELSEWHERE|CLOCKED/.test(group)), "EMPTY", ...pages];
   for (const [i, [group, , , facet]] of KINDS.entries()) {
     assert.equal(dim.valueOf(sent[i]), facet, group);
     assert.equal(isCachedOnPage(KEYS)(sent[i]), onPage.includes(group), group);
@@ -666,14 +713,14 @@ test("the Stremio look, Big Picture and the page's own test call cached what the
     assert.equal(anyStreamCached(sent[i]), badged.includes(group), group);
   }
   assert.deepEqual(facetOptions(sent, dim), [
-    { key: "Cached", count: 4 },
+    { key: "Cached", count: 5 },
     { key: "Debrid", count: 7 },
     { key: "P2P", count: 4 },
   ]);
   for (const value of dim.order) {
     const found = sent.filter((s) => matchesFacets(s, { cached: value }));
     assert.deepEqual(
-      found.map((s) => s.releaseGroup ?? "PAGE"),
+      found.map((s) => KINDS[sent.indexOf(s)][0]),
       groupsOf(([, , , facet]) => facet === value),
       value,
     );
