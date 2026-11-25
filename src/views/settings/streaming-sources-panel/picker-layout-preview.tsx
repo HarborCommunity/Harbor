@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { FormatBadge } from "@/components/format-badge";
 import { useT } from "@/lib/i18n";
 import { useSettingsSampleMeta } from "@/lib/sample-artwork";
+import type { Settings } from "@/lib/settings";
 import { parseStream } from "@/lib/streams/parser";
 import type { ScoredStream } from "@/lib/streams/types";
 import { PrimaryCard } from "@/views/play-picker/primary-card";
@@ -10,7 +11,7 @@ import { formatSize } from "@/views/play-picker/picker-utils";
 
 const NOOP = () => {};
 const QUALITIES = ["1080p", "720p"] as const;
-export function PickerLayoutPreview({ layout }: { layout: "condensed" | "stremio" }) {
+export function PickerLayoutPreview({ layout }: { layout: Settings["pickerLayout"] }) {
   const t = useT();
   const frameRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);

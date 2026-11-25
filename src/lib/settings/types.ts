@@ -11,6 +11,7 @@ import type { SubtitleOffsetPosition, SubtitleOffsetSize } from "@/lib/player/su
 import type { BufferSizeId } from "@/lib/player/buffer-profile";
 import type { UiLanguage } from "@/lib/i18n/languages";
 import type { DisplaySelection } from "@/lib/monitors";
+import type { ModernSort } from "@/views/play-picker/modern/modern-rules";
 
 export type StreamingService =
   | "netflix"
@@ -756,7 +757,10 @@ export type Settings = {
   anilistSyncIndicator: boolean;
   malSyncIndicator: boolean;
   syncIndicatorPosition: SyncIndicatorPosition;
-  pickerLayout: "condensed" | "stremio";
+  pickerLayout: "condensed" | "stremio" | "modern";
+  /** Read it through readModernSort: the stored value is not checked. */
+  pickerModernSort: ModernSort | null;
+  pickerModernBackdrop: boolean;
   streamSort: "harbor" | "addon";
   sourceSort: SourceSort;
   streamPriority: StreamPriorityEntry[];

@@ -1,6 +1,6 @@
 import { useId } from "react";
 import { PickerLayoutPreview } from "./picker-layout-preview";
-import { useSettings } from "@/lib/settings";
+import { useSettings, type Settings } from "@/lib/settings";
 import { tvHover } from "@/lib/keyboard-navigation";
 import { Section, Segmented, ToggleRow } from "../shared";
 import { SettingRow } from "../kit";
@@ -79,8 +79,8 @@ function PickerLayoutPicker({
   value,
   onChange,
 }: {
-  value: "condensed" | "stremio";
-  onChange: (v: "condensed" | "stremio") => void;
+  value: Settings["pickerLayout"];
+  onChange: (v: Settings["pickerLayout"]) => void;
 }) {
   const t = useT();
   const name = useId();
