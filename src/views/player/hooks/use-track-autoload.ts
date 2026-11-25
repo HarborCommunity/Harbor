@@ -477,6 +477,7 @@ export function useTrackAutoload(params: {
             { lang: language, external: true },
             selectionLangs,
             settings.preferEmbeddedSubs,
+            prefs?.subLang,
           );
         // The embedded-source preference must gate downloaded candidates too, or a
         // prepared external track would replace the embedded track Harbor selected
@@ -1041,7 +1042,13 @@ export function useTrackAutoload(params: {
         const keepLocal =
           local != null &&
           (local.pending || localSelected) &&
-          localSubtitleTakesPrecedence(local.language, want, subLangs, settings.preferEmbeddedSubs);
+          localSubtitleTakesPrecedence(
+            local.language,
+            want,
+            subLangs,
+            settings.preferEmbeddedSubs,
+            prefs?.subLang,
+          );
         if (want && !keepLocal) {
           if (want.id !== current?.id) bridgeRef.current?.setSubtitleTrack(want.id, "automatic");
           autoSubIdRef.current = want.id;

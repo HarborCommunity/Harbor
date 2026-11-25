@@ -129,6 +129,7 @@ export function useLocalSubtitleAutoload(params: {
             preferred ?? selected,
             subLangs,
             currentSettings.preferEmbeddedSubs,
+            prefs?.subLang,
           );
         const existing = tracks.find((track) => matchesLocalPath(track, match.path));
         if (existing?.imported) {

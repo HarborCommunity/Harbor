@@ -229,6 +229,43 @@ test("auto-selects the Arabic file from the matching season pack over embedded E
   assert.equal(metadata?.imported, true);
 });
 
+test("selects a matching Arabic sidecar when English is ranked first and embedding is not preferred", async (t) => {
+  const pack = "blue-period-season-1_arabic_2658789-[SubSource]";
+  const filename = "[NETFLIX] Blue Period - 01 [Netflix Worldwide][With intro].ass";
+  const player = subtitlePlayer(t, (path) =>
+    path === "/subs"
+      ? [{ name: pack, isDirectory: true, isFile: false, isSymlink: false }]
+      : [file(filename)],
+  );
+  const src: PlayerSrc = {
+    ...movie,
+    meta: { id: "kitsu:123", type: "series", name: "Blue Period" },
+    episode: { season: 1, episode: 1 },
+  };
+  const settings = { ...player.settings, preferredSubLangs: ["English", "Arabic"] };
+  const snap = {
+    ...player.snap,
+    subtitleTracks: [
+      { id: "1", label: "English", lang: "en", kind: "subtitle" as const, selected: true },
+    ],
+  };
+  await player.render({ src, settings, snap });
+  assert.deepEqual(player.bridge.addSubtitle.mock.calls[0]?.arguments.slice(0, 4), [
+    `/subs/${pack}/${filename}`,
+    "ar",
+    filename.slice(0, -4),
+    true,
+  ]);
+
+  writePlayerPrefs(src.meta.id, { subLang: "en", subsOff: false });
+  try {
+    await player.render({ src: { ...src, url: "https://media.example/other" }, settings, snap });
+    assert.equal(player.bridge.addSubtitle.mock.calls[1]?.arguments[3], false);
+  } finally {
+    clearPlayerPrefs(src.meta.id);
+  }
+});
+
 test("selects an untagged anime subtitle over embedded English and confirms the import", async (t) => {
   const title = "[Crunchyroll] Watashi wo Tabetai, Hitodenashi - 02";
   const load = Promise.withResolvers<boolean>();

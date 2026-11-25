@@ -61,14 +61,21 @@ export function localSubtitleTakesPrecedence(
   other: { lang?: string; external?: boolean } | null,
   preferredLanguages: string[],
   preferEmbedded: boolean,
+  preferredShowLanguage?: string,
 ): boolean {
+  const localScore = langScore(language ?? "", preferredLanguages);
+  if (language && localScore < 0) return false;
   if (!other) return true;
-  // A matching sidecar without a language tag is still an intentional local choice.
-  if (!language) return !preferEmbedded || other.external === true;
-  const localScore = langScore(language, preferredLanguages);
+  if (
+    preferredShowLanguage &&
+    langScore(other.lang ?? "", [preferredShowLanguage]) >
+      langScore(language ?? "", [preferredShowLanguage])
+  )
+    return false;
+  // Language preferences rank matching local files. When embedded subtitles
+  // are not preferred, an eligible local match wins over automatic alternatives.
+  if (!preferEmbedded) return true;
+  if (!language) return other.external === true;
   const otherScore = langScore(other.lang ?? "", preferredLanguages);
-  return (
-    localScore > otherScore ||
-    (localScore === otherScore && (!preferEmbedded || other.external === true))
-  );
+  return localScore > otherScore || (localScore === otherScore && other.external === true);
 }

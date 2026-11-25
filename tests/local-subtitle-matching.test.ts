@@ -6,6 +6,65 @@ import { findMatchingSubtitles } from "../src/lib/subtitles/local-subtitle-match
 
 const show = { title: "Dark", season: 2, episode: 3 };
 
+test("uses the numbering in an anime pack when SubSource labels it season zero", () => {
+  const folder = "/subs/im-standing-on-a-million-lives-season-0-2020_arabic_2586251-[SubSource]";
+  const romaji = "100-man no inochi no Ue ni Ore wa Tatte Iru";
+  const names = [
+    `[NGT] ${romaji} - 02 [1080p].ass`,
+    `[NGT] ${romaji} - 03 [1080p].ass`,
+    `[NGT] ${romaji} - 02-03 [1080p].ass`,
+    `[NGT] ${romaji} OVA - 02 [1080p].ass`,
+    `[NGT] ${romaji} Movie - 02 [1080p].ass`,
+    `[NGT] ${romaji} S00E02.ass`,
+    `[NGT] ${romaji} S02E02.ass`,
+  ];
+  const files = names.map((name) => `${folder}/${name}`);
+  const media = {
+    title: "I'm Standing on a Million Lives",
+    mediaType: "anime" as const,
+    episode: 2,
+  };
+  for (const alternateTitles of [undefined, [romaji]]) {
+    assert.deepEqual(findMatchingSubtitles(files, { ...media, alternateTitles, season: 1 }), [
+      { path: files[0], language: "ar" },
+    ]);
+  }
+  assert.deepEqual(findMatchingSubtitles(files, { ...media, season: 0, absoluteNumber: 2 }), [
+    { path: files[5], language: "ar" },
+  ]);
+  assert.deepEqual(findMatchingSubtitles(files, { ...media, season: 2, absoluteNumber: 14 }), [
+    { path: files[6], language: "ar" },
+  ]);
+  assert.deepEqual(
+    findMatchingSubtitles(files, {
+      ...media,
+      alternateTitles: [romaji],
+      season: 2,
+      episode: 14,
+      absoluteNumber: 2,
+    }),
+    [],
+  );
+});
+
+test("matches a Romanized episode filename inside a verified first-season anime pack", () => {
+  const folder = "/subs/puella-magi-madoka-magica-season-1_arabic_2585019-[SubSource]";
+  const filename = "[Mezzo] Mahou Shoujo Madoka Magica - 03 [BD][Meguca].ass";
+  const media = {
+    title: "Puella Magi Madoka Magica",
+    mediaType: "anime" as const,
+    episode: 3,
+    season: 1,
+  };
+  assert.deepEqual(
+    findMatchingSubtitles(
+      [`/subs/unrelated-season-1_arabic_123-[SubSource]/${filename}`, `${folder}/${filename}`],
+      media,
+    ),
+    [{ path: `${folder}/${filename}`, language: "ar" }],
+  );
+});
+
 test("matches translated anime titles through provider aliases and the resolved release", () => {
   const root = "/subs";
   const anime = `${root}/[Crunchyroll] Watashi wo Tabetai, Hitodenashi - 02.ass`;
@@ -113,7 +172,10 @@ test("matches extracted SubSource season packs with Romanized filenames", () => 
       { path, language: "ar" },
     ]);
   }
-  assert.deepEqual(findMatchingSubtitles(files, { ...media, season: 1 }, ["ar"], root), []);
+  assert.deepEqual(
+    findMatchingSubtitles(files, { ...media, mediaType: "anime", season: 1 }, ["ar"], root),
+    [],
+  );
   assert.deepEqual(findMatchingSubtitles(files, { ...media, season: 3 }, ["en"], root), []);
 });
 

@@ -38,6 +38,9 @@ const SEASON_SUFFIX =
 const SUBSOURCE_PACK = /^(.+)_([^_]+)_\d+-\[subsource\]$/u;
 const PACK_EPISODE_MARKER =
   /(?<![\p{L}\p{N}])(?:s(?:eason)?[ ._-]*\d{1,3}|\d{1,3}(?:(?:st|nd|rd|th)[ ._-]+season|x\d))/gu;
+const ANIME_DASH_EPISODE = /[ ._]+-[ ._]+(?=\d)/u;
+const PACK_OTHER_EDITION =
+  /\b(?:movie|recap|director['’]?s?[ ._-]+cut|re[ ._-]?edit|henshu{1,2}[ ._-]+ban)\b/u;
 const SPECIAL_EPISODE = /^(?:special|sp|ova|oad)[ ._-]*(\d{1,3})(?:v\d+)?(?=$|[^\p{L}\p{N}])/u;
 const SPECIAL_TAG = /(?<![\p{L}\p{N}])(?:specials?|sp|ova|oad)(?![\p{L}\p{N}])/u;
 const SEASON_TAG = /(?<![\p{L}\p{N}])s(?:eason)?[ ._-]*(\d{1,3})(?![\p{L}\p{N}])/gu;
@@ -172,12 +175,19 @@ function episodeMatch(value: string) {
   return { season, episode: number, suffix };
 }
 
-function packEpisode(name: string): ReturnType<typeof episodeMatch> {
-  const trimmed = name.replace(/^(?:\[[^\]]+\]\s*)+/, "");
+function packEpisode(name: string, allowBareNumber: boolean): ReturnType<typeof episodeMatch> {
+  const trimmed = name.replace(RELEASE_GROUPS, "");
   const markers = [...trimmed.matchAll(PACK_EPISODE_MARKER)];
-  if (markers.length !== 1) return;
-  const episode = episodeMatch(trimmed.slice(markers[0].index));
-  if (episode?.season != null) return episode;
+  if (markers.length === 1) {
+    const episode = episodeMatch(trimmed.slice(markers[0].index));
+    if (episode?.season != null) return episode;
+  }
+  if (!allowBareNumber || markers.length > 0) return;
+  const dash = ANIME_DASH_EPISODE.exec(trimmed);
+  if (!dash) return;
+  const title = trimmed.slice(0, dash.index);
+  if (!/\p{L}/u.test(title) || SPECIAL_TAG.test(title) || PACK_OTHER_EDITION.test(title)) return;
+  return episodeMatch(trimmed.slice(dash.index + dash[0].length));
 }
 
 function releaseTitle(media: LocalSubtitleMedia, movie: boolean): string | undefined {
@@ -203,7 +213,7 @@ function releaseTitle(media: LocalSubtitleMedia, movie: boolean): string | undef
       title = stem.slice(0, episode.index);
     }
   } else if (media.mediaType === "anime") {
-    const dash = /[ ._]+-[ ._]+(?=\d)/u.exec(stem);
+    const dash = ANIME_DASH_EPISODE.exec(stem);
     const relative = dash && episodeMatch(stem.slice(dash.index + dash[0].length));
     if (
       dash &&
@@ -315,7 +325,13 @@ function matchEpisode(
     SEASON_EPISODE.test(noYear) || (/^[e第]/u.test(noYear) && EPISODE.test(noYear));
   const direct = episodeMatch(labeledEpisode ? noYear : nameToParse);
   const pack = folders.find((folder) => folder.subtitlePack);
-  const episode = direct ?? (!title && pack ? packEpisode(name) : undefined);
+  const targetSeason = media.season ?? 1;
+  const anime = media.mediaType === "anime";
+  const episode =
+    direct ??
+    (!title && pack
+      ? packEpisode(name, anime && targetSeason === 1 && (pack.season === 0 || pack.season === 1))
+      : undefined);
   if (!episode) return;
   if (
     !title &&
@@ -331,14 +347,19 @@ function matchEpisode(
     episode.season,
     SPECIAL_TAG.test(episode.suffix) ? 0 : undefined,
     ...Array.from(episode.suffix.matchAll(SEASON_TAG), (match) => Number(match[1])),
-    ...folders.map((folder) => folder.season),
+    // SubSource sometimes assigns season 0 to regular anime packs. Explicit
+    // S00 or specials markers in the file or a local folder still count.
+    ...folders.map((folder) =>
+      anime && folder.subtitlePack && folder.season === 0 ? undefined : folder.season,
+    ),
   ].filter((season) => season != null);
-  const targetSeason = media.season ?? 1;
   if (seasons.some((season) => season !== targetSeason)) return;
   const regularMatch =
     episode.episode === media.episode && (seasons.length > 0 || targetSeason === 1);
   const absoluteMatch =
     media.mediaType !== "series" &&
+    targetSeason > 0 &&
+    !(anime && pack?.season === 0) &&
     seasons.length === 0 &&
     episode.episode === media.absoluteNumber &&
     media.absoluteNumber !== media.episode;
@@ -365,7 +386,7 @@ export function findMatchingSubtitles(
   return title
     ? matchSubtitles(
         files,
-        { ...media, title, alternateTitles: [] },
+        { ...media, title, alternateTitles: [media.title, ...(media.alternateTitles ?? [])] },
         preferredLanguages,
         rootFolder,
         options,
