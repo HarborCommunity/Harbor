@@ -2,20 +2,26 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { FormatBadge } from "@/components/format-badge";
 import { useT } from "@/lib/i18n";
 import { useSettingsSampleMeta } from "@/lib/sample-artwork";
+import type { Settings } from "@/lib/settings";
 import { parseStream } from "@/lib/streams/parser";
 import type { ScoredStream } from "@/lib/streams/types";
+import { ModernList } from "@/views/play-picker/modern/modern-list";
+import { ModernShell } from "@/views/play-picker/modern/modern-shell";
+import { useModernPickerState } from "@/views/play-picker/modern/modern-state";
 import { PrimaryCard } from "@/views/play-picker/primary-card";
 import { StremioRow } from "@/views/play-picker/stremio-row";
 import { formatSize } from "@/views/play-picker/picker-utils";
 
 const NOOP = () => {};
+const NONE = new Set<ScoredStream>();
 const QUALITIES = ["1080p", "720p"] as const;
-export function PickerLayoutPreview({ layout }: { layout: "condensed" | "stremio" }) {
+export function PickerLayoutPreview({ layout }: { layout: Settings["pickerLayout"] }) {
   const t = useT();
   const frameRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(0);
   const sample = useSettingsSampleMeta(14);
+  const modernState = useModernPickerState();
   const sampleStreams: ScoredStream[] = QUALITIES.map((quality, index) => ({
     ...parseStream({
       addonId: "harbor-settings-preview",
@@ -67,10 +73,43 @@ export function PickerLayoutPreview({ layout }: { layout: "condensed" | "stremio
       >
         <div
           ref={stageRef}
-          className="absolute left-1/2 top-1/2 w-[800px]"
+          className={`absolute left-1/2 top-1/2 ${layout === "modern" ? "w-[1200px] p-5" : "w-[800px]"}`}
           style={{ transform: `translate(-50%, -50%) scale(${scale})` }}
         >
-          {layout === "condensed" ? (
+          {layout === "modern" ? (
+            <ModernShell
+              state={modernState}
+              meta={sample}
+              streams={streams}
+              isAnime={false}
+              pipelineDone
+              cachedOnly={false}
+              noneCached={false}
+              onCachedOnly={NOOP}
+            >
+              <ModernList
+                streams={streams}
+                ranked={streams}
+                noneCached={false}
+                onCachedOnly={NOOP}
+                preferred={streams[0]}
+                previousMatch={null}
+                lastPlayedStream={null}
+                failedStreams={NONE}
+                debrids={[]}
+                addons={null}
+                getAddonLogo={() => null}
+                pipelineDone
+                orderName="harbor"
+                isAnime={false}
+                onPlay={NOOP}
+                onCache={NOOP}
+                resolvingStream={null}
+                queuedHash={null}
+                inSession={false}
+              />
+            </ModernShell>
+          ) : layout === "condensed" ? (
             <div className="flex flex-col gap-5">
               <PrimaryCard
                 meta={sample}

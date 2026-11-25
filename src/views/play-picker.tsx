@@ -64,6 +64,10 @@ import { DebridDownModal } from "./play-picker/debrid-down-modal";
 import { P2pConfirmModal } from "./play-picker/p2p-confirm-modal";
 import { CachedFilterPill, LanguageFilterPill } from "./play-picker/filter-pills";
 import { PickerEmptyLadder } from "./play-picker/picker-empty-ladder";
+import { PickerBody } from "./play-picker/picker-body";
+import { ModernList } from "./play-picker/modern/modern-list";
+import { startsAtOnce } from "./play-picker/modern/modern-rules";
+import { useModernPickerState } from "./play-picker/modern/modern-state";
 import { NoSourcesConfiguredModal } from "./play-picker/no-sources-modal";
 import {
   addonFailureLabel,
@@ -339,6 +343,13 @@ export function PlayPicker({
     settings.requirePreferredLanguage === true && baseLangs.length > 0,
   );
   const [cachedOnly, setCachedOnly] = useState(false);
+  const modern = settings.pickerLayout === "modern" && !isDownload;
+  const modernState = useModernPickerState();
+  // A refresh that a person asks for. The modern look knows a failed source again on newer objects.
+  const askAgain = () => {
+    if (modern) setFailedStreams(new Set());
+    refresh();
+  };
 
   const { inviteKey, canInvite, inviteSentRef, hostSourceForMedia, expectHostSource } =
     useRoomInvite({
@@ -403,16 +414,20 @@ export function PlayPicker({
       const langFiltered = all.filter((s) => streamMatchesLangs(s, preferredLangs));
       if (langFiltered.length > 0) all = langFiltered;
     }
-    if (cachedOnly && debrids.length > 0) {
-      const cached = all.filter(isCached);
+    // With nothing cached the other looks show everything; the modern one shows none of it and starts
+    // none of it by itself, so that its switch keeps its word.
+    let noneCached = false;
+    if (cachedOnly && (modern || debrids.length > 0)) {
+      const cached = all.filter(modern ? startsAtOnce : isCached);
       if (cached.length > 0) all = cached;
+      else noneCached = modern && all.length > 0;
     }
     let allRaw = all;
     let fellBack = false;
     if (activeStreamFilter && !hostMatch) {
       const matched = all.filter((s) => matchesCustomFilter(s, activeStreamFilter));
       if (matched.length > 0) all = matched;
-      else fellBack = true;
+      else fellBack = !noneCached;
     }
     if (all.length === 0 && candidatePool.length > 0) {
       all = candidatePool;
@@ -433,12 +448,13 @@ export function PlayPicker({
       (s): s is ScoredStream => s != null && all.includes(s),
     );
     const primary = primaryCandidates[0] ?? null;
-    return { primary, byTier, all, allRaw, fellBack };
+    return { primary, byTier, all, allRaw, ranked, fellBack, noneCached };
   }, [
     result,
     langFilter,
     preferredLangs,
     cachedOnly,
+    modern,
     debrids.length,
     isCached,
     hostMatch,
@@ -574,7 +590,8 @@ export function PlayPicker({
     !autoCancelled &&
     !autoExhausted &&
     !isDownload &&
-    !roomGuestPick;
+    !roomGuestPick &&
+    !filteredPicker?.noneCached;
   useEffect(() => {
     if (!autoActive) return;
     if (preferredSourceAddonPending(preferredSourceEntry, false, pipelineDone, addonQuorum)) return;
@@ -828,6 +845,7 @@ export function PlayPicker({
     !roomGuestPick &&
     !inSession &&
     !rememberedAddonPending &&
+    !filteredPicker?.noneCached &&
     rememberedInstant &&
     (attempt ?? 0) === 0;
   useEffect(() => {
@@ -1136,9 +1154,17 @@ export function PlayPicker({
     );
   }
 
+  const modernList = modern && filteredPicker && filteredPicker.all.length > 0;
+  const modeSwitch = !isDownload && result && result.picker.all.length > 0 && (
+    <StreamModeToggle
+      mode={settings.streamMode}
+      onChange={(mode) => update({ streamMode: mode })}
+    />
+  );
+
   return (
     <main ref={setMainRef} className="absolute inset-0 z-60 overflow-y-auto bg-canvas">
-      <BackdropLayer src={backdropSrc} />
+      {(!modern || settings.pickerModernBackdrop) && <BackdropLayer src={backdropSrc} />}
 
       <div
         aria-hidden
@@ -1146,8 +1172,25 @@ export function PlayPicker({
         className="absolute start-0 end-6 top-0 z-10 h-20"
       />
 
-      <div className="relative z-20 mx-auto flex min-h-full w-full max-w-5xl flex-col gap-5 px-12 pb-32 pt-6">
-        <PickerNav onBack={backToDetail} onRefresh={refresh} refreshing={loading} />
+      <PickerBody
+        nav={<PickerNav onBack={backToDetail} onRefresh={askAgain} refreshing={loading} />}
+        shell={
+          modern
+            ? {
+                state: modernState,
+                meta: metaForDisplay,
+                episode,
+                absoluteEpisode: animeAbsoluteEpisode,
+                streams: displayStreams,
+                isAnime: isAnimeMetaId,
+                pipelineDone,
+                cachedOnly,
+                noneCached: filteredPicker?.noneCached ?? false,
+                onCachedOnly: setCachedOnly,
+              }
+            : null
+        }
+      >
         {pickerErrorText && engineWarming && (
           <div className="flex items-center gap-3 rounded-2xl border border-edge-soft/60 bg-elevated/40 px-5 py-4 text-[13.5px] text-ink-muted">
             <Loader2 size={16} className="shrink-0 animate-spin text-ink-subtle" />
@@ -1159,11 +1202,13 @@ export function PlayPicker({
             {pickerErrorText}
           </div>
         )}
-        <PickerHeader
-          meta={metaForDisplay}
-          episode={episode}
-          absoluteEpisode={animeAbsoluteEpisode}
-        />
+        {!modern && (
+          <PickerHeader
+            meta={metaForDisplay}
+            episode={episode}
+            absoluteEpisode={animeAbsoluteEpisode}
+          />
+        )}
 
         {!isDownload && (
           <LocalStreamList
@@ -1251,7 +1296,7 @@ export function PlayPicker({
               </p>
             </div>
             <button
-              onClick={refresh}
+              onClick={askAgain}
               disabled={loading}
               className="shrink-0 rounded-full bg-elevated px-4 py-2 text-[12.5px] font-semibold text-ink ring-1 ring-edge-soft transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:scale-100"
             >
@@ -1275,7 +1320,7 @@ export function PlayPicker({
               </p>
             </div>
             <button
-              onClick={refresh}
+              onClick={askAgain}
               disabled={loading}
               className="shrink-0 rounded-full bg-elevated px-4 py-2 text-[12.5px] font-semibold text-ink ring-1 ring-edge-soft transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 motion-reduce:transition-none motion-reduce:hover:scale-100"
             >
@@ -1297,7 +1342,8 @@ export function PlayPicker({
             onOpenSettings={() => openSettings("streaming")}
           />
         ) : (
-          !isSeasonDownload && (
+          !isSeasonDownload &&
+          !filteredPicker?.noneCached && (
             <PickerEmptyLadder
               meta={meta}
               result={result}
@@ -1332,18 +1378,37 @@ export function PlayPicker({
           />
         )}
 
-        {!isDownload && result && result.picker.all.length > 0 && (
-          <div className="flex justify-end">
-            <StreamModeToggle
-              mode={settings.streamMode}
-              onChange={(mode) => update({ streamMode: mode })}
-            />
-          </div>
-        )}
+        {modeSwitch && !modernList && <div className="flex justify-end">{modeSwitch}</div>}
 
-        {(settings.pickerLayout === "stremio" || isDownload) &&
-        filteredPicker &&
-        filteredPicker.all.length > 0 ? (
+        {modernList ? (
+          <ModernList
+            modeSwitch={modeSwitch}
+            episode={episode}
+            absoluteEpisode={animeAbsoluteEpisode}
+            streams={displayStreams}
+            ranked={filteredPicker.ranked}
+            noneCached={filteredPicker.noneCached}
+            onCachedOnly={setCachedOnly}
+            preferred={previousMatch ?? sameSourceMatch ?? filteredPicker.primary}
+            previousMatch={previousMatch}
+            lastPlayedStream={lastPlayedMatch}
+            failedStreams={failedStreams}
+            debrids={debrids}
+            addons={addons}
+            getAddonLogo={lookupLogo}
+            pipelineDone={pipelineDone}
+            orderName={hostMatch ? "together" : addonOrderMode ? "addon" : "harbor"}
+            matchFor={hostMatch ? matchFor : undefined}
+            isAnime={isAnimeMetaId}
+            onPlay={playManually}
+            onCache={onCache}
+            resolvingStream={resolving?.stream ?? null}
+            queuedHash={queuedHash}
+            inSession={inSession}
+          />
+        ) : (settings.pickerLayout === "stremio" || isDownload) &&
+          filteredPicker &&
+          filteredPicker.all.length > 0 ? (
           <StremioLayout
             streams={displayStreams}
             lastPlayedStream={lastPlayedMatch}
@@ -1452,7 +1517,7 @@ export function PlayPicker({
             )}
           </>
         )}
-      </div>
+      </PickerBody>
       {(settings.pickerLayout === "stremio" || isDownload) &&
         filteredPicker &&
         filteredPicker.all.length > 0 && (

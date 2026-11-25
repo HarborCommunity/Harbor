@@ -602,6 +602,8 @@ export const DEFAULT: Settings = {
   malSyncIndicator: true,
   syncIndicatorPosition: "top-right",
   pickerLayout: "stremio",
+  pickerModernSort: null,
+  pickerModernBackdrop: false,
   streamSort: "addon",
   sourceSort: "default",
   streamPriority: [],

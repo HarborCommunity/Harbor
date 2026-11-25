@@ -51,6 +51,33 @@ export function PickerNav({
   );
 }
 
+export function pickerEpisode(meta: Meta, episode: PlayEpisode, absoluteEpisode?: number | null) {
+  const partSeason = splitFranchiseDisplaySeason(
+    parseKitsuId(episode.kitsuStreamId ?? "") ?? parseKitsuId(meta.id),
+  );
+  const twoDigits = (n: number) => String(n).padStart(2, "0");
+  const place =
+    absoluteEpisode != null
+      ? { season: null, episode: String(absoluteEpisode) }
+      : partSeason != null
+        ? { season: partSeason, episode: twoDigits(episode.episode) }
+        : {
+            season: episode.imdbSeason ?? episode.season,
+            episode: twoDigits(episode.imdbEpisode ?? episode.episode),
+          };
+  return {
+    ...place,
+    name: episode.name || metaEpisodeName(meta, episode),
+    number: absoluteEpisode ?? episode.episode,
+  };
+}
+
+export function pickerFilmLine(meta: Meta): string | null {
+  if (!meta.releaseInfo) return null;
+  const genres = meta.genres?.length ? ` · ${meta.genres.slice(0, 2).join(" · ")}` : "";
+  return `${meta.releaseInfo}${genres}`;
+}
+
 export function PickerHeader({
   meta,
   episode,
@@ -60,35 +87,27 @@ export function PickerHeader({
   episode?: PlayEpisode;
   absoluteEpisode?: number | null;
 }) {
-  const partSeason = episode
-    ? splitFranchiseDisplaySeason(
-        parseKitsuId(episode.kitsuStreamId ?? "") ?? parseKitsuId(meta.id),
-      )
-    : null;
+  const named = episode ? pickerEpisode(meta, episode, absoluteEpisode) : null;
+  const filmLine = pickerFilmLine(meta);
   return (
     <header className="flex flex-col gap-3">
-      {episode ? (
+      {episode && named ? (
         <>
           <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-ink-subtle">
-            {absoluteEpisode != null
-              ? `${meta.name} · Episode ${absoluteEpisode}`
-              : partSeason != null
-                ? `${meta.name} · Season ${partSeason} · Episode ${String(episode.episode).padStart(2, "0")}`
-                : `${meta.name} · Season ${episode.imdbSeason ?? episode.season} · Episode ${String(episode.imdbEpisode ?? episode.episode).padStart(2, "0")}`}
+            {named.season != null
+              ? `${meta.name} · Season ${named.season} · Episode ${named.episode}`
+              : `${meta.name} · Episode ${named.episode}`}
           </p>
           <h1 className="font-display text-[64px] font-medium leading-[0.96] tracking-tight text-ink">
-            {episode.name ||
-              metaEpisodeName(meta, episode) ||
-              `Episode ${absoluteEpisode ?? episode.episode}`}
+            {named.name || `Episode ${named.number}`}
           </h1>
           {episode.overview && <CollapsibleOverview text={episode.overview} />}
         </>
       ) : (
         <>
-          {meta.releaseInfo && (
+          {filmLine && (
             <p className="text-[11px] font-semibold uppercase tracking-[0.32em] text-ink-subtle">
-              {meta.releaseInfo}
-              {meta.genres?.length ? ` · ${meta.genres.slice(0, 2).join(" · ")}` : ""}
+              {filmLine}
             </p>
           )}
           <h1 className="font-display text-[68px] font-medium leading-[0.96] tracking-tight text-ink">
@@ -100,7 +119,14 @@ export function PickerHeader({
   );
 }
 
-function CollapsibleOverview({ text }: { text: string }) {
+export function CollapsibleOverview({
+  text,
+  ownDirection = false,
+}: {
+  text: string;
+  /** Set and cut in the text's own direction, on the side of the page's. */
+  ownDirection?: boolean;
+}) {
   const t = useT();
   const [expanded, setExpanded] = useState(false);
   const [truncated, setTruncated] = useState(false);
@@ -117,7 +143,10 @@ function CollapsibleOverview({ text }: { text: string }) {
     <div className="mt-2 max-w-2xl">
       <p
         ref={ref}
-        className={`text-[14.5px] leading-relaxed text-ink-muted ${expanded ? "" : "line-clamp-2"}`}
+        dir={ownDirection ? "auto" : undefined}
+        className={`text-[14.5px] leading-relaxed text-ink-muted ${expanded ? "" : "line-clamp-2"}${
+          ownDirection ? " [text-align:-webkit-match-parent]" : ""
+        }`}
       >
         {text}
       </p>

@@ -3650,6 +3650,69 @@ const uiFallback: Record<string, string> = {
   "Show episode Jump button": "Show episode Jump button",
   "Show a floating shortcut to jump to an episode in long lists. Automatically hides during playback.":
     "Show a floating shortcut to jump to an episode in long lists. Automatically hides during playback.",
+  // The Harbor Modern picker look awaits localized overrides.
+  "Single episode": "Single episode",
+  Batch: "Batch",
+  Subbed: "Subbed",
+  Dubbed: "Dubbed",
+  Dual: "Dual",
+  "More filters": "More filters",
+  "Fewer filters": "Fewer filters",
+  "{n} source so far": "{n} source so far",
+  "{n} sources so far": "{n} sources so far",
+  "{ready} ready to start at once": "{ready} ready to start at once",
+  "No source matches these filters.": "No source matches these filters.",
+  "None of the {n} sources match these filters.": "None of the {n} sources match these filters.",
+  "Harbor's pick is {name} in {resolution}, {size}.":
+    "Harbor's pick is {name} in {resolution}, {size}.",
+  "With these filters, Harbor's pick is {name} in {resolution}, {size}.":
+    "With these filters, Harbor's pick is {name} in {resolution}, {size}.",
+  "Harbor's pick comes from {addon}, in {resolution}, {size}.":
+    "Harbor's pick comes from {addon}, in {resolution}, {size}.",
+  "With these filters, Harbor's pick comes from {addon}, in {resolution}, {size}.":
+    "With these filters, Harbor's pick comes from {addon}, in {resolution}, {size}.",
+  "unknown quality": "unknown quality",
+  "size unknown": "size unknown",
+  "Played last time.": "Played last time.",
+  "In your {providers} library.": "In your {providers} library.",
+  "Cached on {providers}, so it starts at once.": "Cached on {providers}, so it starts at once.",
+  "Cached, so it starts at once.": "Cached, so it starts at once.",
+  "Not cached yet, so {provider} has to fetch it first.":
+    "Not cached yet, so {provider} has to fetch it first.",
+  "Not cached yet.": "Not cached yet.",
+  "Streams from peers.": "Streams from peers.",
+  "Most seeders at {resolution}.": "Most seeders at {resolution}.",
+  "Exactly this episode.": "Exactly this episode.",
+  "A batch.": "A batch.",
+  "With {first} and {second}.": "With {first} and {second}.",
+  "With {format}.": "With {format}.",
+  "In Harbor ranking order.": "In Harbor ranking order.",
+  "In addon order.": "In addon order.",
+  "In Watch Together order, the host's source first.":
+    "In Watch Together order, the host's source first.",
+  "Click a heading to sort by it.": "Click a heading to sort by it.",
+  "Sorted by release, A to Z.": "Sorted by release, A to Z.",
+  "Sorted by release, Z to A.": "Sorted by release, Z to A.",
+  "Sorted by resolution, highest first.": "Sorted by resolution, highest first.",
+  "Sorted by resolution, lowest first.": "Sorted by resolution, lowest first.",
+  "Sorted by seeders, most first.": "Sorted by seeders, most first.",
+  "Sorted by seeders, fewest first.": "Sorted by seeders, fewest first.",
+  "Sorted by size, largest first.": "Sorted by size, largest first.",
+  "Sorted by size, smallest first.": "Sorted by size, smallest first.",
+  "Back to Harbor ranking": "Back to Harbor ranking",
+  "Back to addon order": "Back to addon order",
+  "Back to Watch Together order": "Back to Watch Together order",
+  "The list has changed.": "The list has changed.",
+  Seeders: "Seeders",
+  "Harbor's pick": "Harbor's pick",
+  "Harbor Modern": "Harbor Modern",
+  "Harbor Modern puts the picture and the filters at the side and every source in one list you sort by its headings.":
+    "Harbor Modern puts the picture and the filters at the side and every source in one list you sort by its headings.",
+  "In Harbor Modern it shows file names in full, and the addon's whole description where there is no file name.":
+    "In Harbor Modern it shows file names in full, and the addon's whole description where there is no file name.",
+  "Artwork behind the picker": "Artwork behind the picker",
+  "Fades the title's artwork in behind the whole picker. Harbor Modern only.":
+    "Fades the title's artwork in behind the whole picker. Harbor Modern only.",
 };
 
 export default uiFallback;
