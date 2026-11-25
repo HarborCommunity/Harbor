@@ -5,6 +5,7 @@ import type { DirEntry } from "@tauri-apps/plugin-fs";
 import { JSDOM } from "jsdom";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
+import { ListToastHost } from "../src/components/lists/list-toast";
 import { emptySnapshot, type PlayerBridge } from "../src/lib/player/bridge";
 import { clearPlayerPrefs, writePlayerPrefs } from "../src/lib/player-prefs";
 import { DEFAULT } from "../src/lib/settings/defaults";
@@ -83,9 +84,10 @@ function subtitlePlayer(
     src: movie,
   };
   const root = createRoot(document.getElementById("root")!);
+  let localSelection: ReturnType<typeof useLocalSubtitleAutoload> | undefined;
   function Player(props: HookProps) {
-    useLocalSubtitleAutoload(props);
-    return null;
+    localSelection = useLocalSubtitleAutoload(props);
+    return <ListToastHost />;
   }
   t.after(async () => {
     await act(async () => root.unmount());
@@ -100,6 +102,8 @@ function subtitlePlayer(
     paths,
     settings: defaults.settings,
     snap: defaults.snap,
+    localSelection: () => localSelection?.current,
+    notification: () => document.querySelector("[role='status']")?.textContent,
     pickManually: () => {
       automatic = false;
     },
@@ -222,6 +226,96 @@ test("auto-selects the Arabic file from the matching season pack over embedded E
   assert.equal(language, "ar");
   assert.equal(selected, true);
   assert.equal(metadata?.imported, true);
+});
+
+test("selects an untagged anime subtitle over embedded English and confirms the import", async (t) => {
+  const title = "[Crunchyroll] Watashi wo Tabetai, Hitodenashi - 02";
+  const load = Promise.withResolvers<boolean>();
+  const player = subtitlePlayer(
+    t,
+    () => [file(`${title}.ass`)],
+    () => load.promise,
+  );
+  const src: PlayerSrc = {
+    ...movie,
+    meta: {
+      id: "kitsu:123",
+      type: "series",
+      name: "This Monster Wants to Eat Me",
+      alternateTitles: ["Watashi o Tabetai, Hitodenashi"],
+    },
+    episode: { season: 1, episode: 2 },
+  };
+  const snap = {
+    ...player.snap,
+    subtitleTracks: [
+      { id: "1", label: "English", lang: "en", kind: "subtitle" as const, selected: true },
+    ],
+  };
+  await player.render({ src, snap });
+  assert.deepEqual(player.bridge.addSubtitle.mock.calls[0]?.arguments, [
+    `/subs/${title}.ass`,
+    undefined,
+    title,
+    true,
+    { forced: undefined, imported: true },
+    "automatic",
+  ]);
+  assert.equal(player.notification(), undefined);
+
+  await act(async () => load.resolve(true));
+  assert.equal(player.notification(), `Loaded ${title}`);
+  assert.equal(player.localSelection()?.pending, true);
+
+  await player.render({
+    src: { ...src },
+    snap: {
+      ...snap,
+      subtitleTracks: [
+        {
+          id: "2",
+          label: title,
+          kind: "subtitle",
+          external: true,
+          imported: true,
+          url: `/subs/${title}.ass`,
+          selected: true,
+        },
+      ],
+    },
+  });
+  assert.equal(player.bridge.addSubtitle.mock.callCount(), 1);
+  assert.equal(player.bridge.setSubtitleTrack.mock.callCount(), 0);
+  assert.equal(player.localSelection()?.pending, false);
+});
+
+test("does not announce a failed import or an import from a previous video", async (t) => {
+  const load = Promise.withResolvers<boolean>();
+  let attempts = 0;
+  const player = subtitlePlayer(
+    t,
+    () => [file("The Crossing.2024.srt")],
+    () => (attempts++ === 0 ? load.promise : Promise.resolve(false)),
+  );
+  await player.render();
+  await player.render({ src: { ...movie, url: "https://media.example/other" } });
+  await act(async () => load.resolve(true));
+  assert.equal(player.bridge.addSubtitle.mock.callCount(), 2);
+  assert.equal(player.notification(), undefined);
+  assert.equal(player.localSelection(), null);
+});
+
+test("keeps the embedded selection when preferred and still confirms the import", async (t) => {
+  const player = subtitlePlayer(t, () => [file("The Crossing.2024.srt")]);
+  await player.render({
+    settings: { ...player.settings, preferEmbeddedSubs: true },
+    snap: {
+      ...player.snap,
+      subtitleTracks: [{ id: "1", label: "English", lang: "en", kind: "subtitle", selected: true }],
+    },
+  });
+  assert.equal(player.bridge.addSubtitle.mock.calls[0]?.arguments[3], false);
+  assert.equal(player.notification(), "Loaded The Crossing.2024");
 });
 
 test("loads the season-wide subtitle when a split anime part starts its numbering over", async (t) => {

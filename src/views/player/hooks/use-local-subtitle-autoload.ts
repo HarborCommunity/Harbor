@@ -1,4 +1,6 @@
 import { useEffect, useRef, type RefObject } from "react";
+import { emitListToast } from "@/components/lists/list-toast";
+import { t } from "@/lib/i18n";
 import { capturePlaybackActor, isPlaybackActorCurrent } from "@/lib/playback-history";
 import { osClass } from "@/lib/platform";
 import { readPlayerPrefs } from "@/lib/player-prefs";
@@ -52,6 +54,16 @@ export function useLocalSubtitleAutoload(params: {
   useEffect(() => {
     localSubRef.current = null;
   }, [src.url, src.meta.id, src.episode?.season, src.episode?.episode, bridgeKey]);
+  useEffect(() => {
+    // Native tracks can arrive after addSubtitle resolves. Keep the selection intent until then.
+    const local = localSubRef.current;
+    if (
+      local?.pending &&
+      snap.subtitleTracks.some((track) => matchesLocalPath(track, local.path))
+    ) {
+      local.pending = false;
+    }
+  }, [snap.subtitleTracks]);
   useEffect(() => {
     const folder = settings.localSubtitleFolder;
     const bridge = bridgeRef.current;
@@ -141,10 +153,12 @@ export function useLocalSubtitleAutoload(params: {
         } catch {
           // A broken file should leave the next matching subtitle available.
         }
-        if (localSubRef.current === candidate) {
-          localSubRef.current = loaded && isActive() ? { ...candidate, pending: false } : null;
-        }
-        if (loaded) return;
+        const active = isActive();
+        if ((!loaded || !active) && localSubRef.current === candidate) localSubRef.current = null;
+        if (!active) return;
+        if (!loaded) continue;
+        emitListToast(t("Loaded {name}", { name: match.title }));
+        return;
       }
       if (candidates.length > 0 && isActive()) {
         console.warn("[subs/local] could not load a matching subtitle");

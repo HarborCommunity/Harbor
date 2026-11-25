@@ -63,7 +63,9 @@ export function localSubtitleTakesPrecedence(
   preferEmbedded: boolean,
 ): boolean {
   if (!other) return true;
-  const localScore = langScore(language ?? "", preferredLanguages);
+  // A matching sidecar without a language tag is still an intentional local choice.
+  if (!language) return !preferEmbedded || other.external === true;
+  const localScore = langScore(language, preferredLanguages);
   const otherScore = langScore(other.lang ?? "", preferredLanguages);
   return (
     localScore > otherScore ||
