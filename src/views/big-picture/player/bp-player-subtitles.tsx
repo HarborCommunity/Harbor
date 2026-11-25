@@ -80,7 +80,11 @@ export function BpPlayerSubtitles(props: BpPlayerSubtitlesProps) {
   const langTracks = useMemo(() => {
     const keep = new Set(filterTracksByPreferredLanguage(tracks, preferred));
     for (const track of tracks) {
-      if (hasImportedSubTitle(track.title) || importedTitles.has(track.title ?? ""))
+      if (
+        track.imported ||
+        hasImportedSubTitle(track.title) ||
+        importedTitles.has(track.title ?? "")
+      )
         keep.add(track);
       if (track.id === selectedId || track.secondary) keep.add(track);
     }
@@ -295,7 +299,9 @@ export function BpPlayerSubtitles(props: BpPlayerSubtitlesProps) {
               />
               {visible.map((track) => {
                 const imported =
-                  hasImportedSubTitle(track.title) || importedTitles.has(track.title ?? "");
+                  track.imported ||
+                  hasImportedSubTitle(track.title) ||
+                  importedTitles.has(track.title ?? "");
                 const badges = tagsOf(track, t);
                 if (imported) badges.unshift(t("Yours"));
                 if (best?.track.id === track.id) badges.unshift(t("Best match"));

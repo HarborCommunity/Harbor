@@ -599,8 +599,12 @@ async function applyAnilistAiringDates(episodes: KitsuEpisode[], kitsuId: number
     // Season-zero specials are outside the regular AniList episode sequence.
     // Anime episode enrichment may retain native season 1 while mapping the
     // same special to IMDb season 0, so both coordinates must be checked.
-    if (!Number.isInteger(episode.seasonNumber) || episode.seasonNumber <= 0 ||
-        episode.imdbSeason === 0) continue;
+    if (
+      !Number.isInteger(episode.seasonNumber) ||
+      episode.seasonNumber <= 0 ||
+      episode.imdbSeason === 0
+    )
+      continue;
     const airingAt = schedule[episode.number];
     if (Number.isFinite(airingAt) && airingAt > 0) {
       episode.airdate = new Date(airingAt * 1000).toISOString();
@@ -846,6 +850,7 @@ async function loadAnimeDetails(
     imdbId: seriesImdb ?? addonMeta?.imdb_id ?? null,
     title: anime.title,
     originalTitle: anime.title,
+    altTitles: anime.altTitles,
     overview: anime.synopsis,
     poster: anime.poster,
     backdrop: anime.backdrop,

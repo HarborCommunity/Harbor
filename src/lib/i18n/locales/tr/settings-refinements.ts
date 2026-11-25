@@ -798,6 +798,11 @@ const settingsRefinements: Record<string, string> = {
   "The settings sidebar uses a separate icon set, not drawn by Abiyyu.":
     "Ayarlar kenar çubuğu, Abiyyu tarafından çizilmemiş ayrı bir simge seti kullanır.",
   "Controller button glyphs:": "Kontrolcü düğme simgeleri:",
+  "Local subtitles": "Yerel altyazılar",
+  "Choose a folder to automatically load matching subtitles for movies and episodes.":
+    "Filmler ve bölümlerle eşleşen altyazıları otomatik olarak yüklemek için bir klasör seçin.",
+  "Subtitle folder": "Altyazı klasörü",
+  "No folder selected": "Klasör seçilmedi",
 };
 
 export default settingsRefinements;

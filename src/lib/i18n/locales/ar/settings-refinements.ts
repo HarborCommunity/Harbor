@@ -810,6 +810,11 @@ const settingsRefinements: Record<string, string> = {
   "Poster cards": "بطاقات الملصقات",
   "Show a laurel tab on award-winning titles. Choose its position below.":
     "أظهر تبويب الغار في العناوين الحائزة على جوائز. اختر موضعه أدناه.",
+  "Local subtitles": "الترجمات المحلية",
+  "Choose a folder to automatically load matching subtitles for movies and episodes.":
+    "اختر مجلدًا لتحميل الترجمات المطابقة للأفلام والحلقات تلقائيًا.",
+  "Subtitle folder": "مجلد الترجمات",
+  "No folder selected": "لم يتم اختيار مجلد",
 };
 
 export default settingsRefinements;

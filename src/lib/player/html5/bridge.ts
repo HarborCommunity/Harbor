@@ -8,8 +8,14 @@ import {
   type PlayerSource,
   type TrackInfo,
 } from "../bridge";
-import { fetchAndParse, findActiveCue } from "@/lib/subtitles/parser";
-import { SubtitlePreparationError, prepareSubtitle } from "@/lib/subtitles/prepare";
+import { findActiveCue, parseSubtitle } from "@/lib/subtitles/parser";
+import { decodeSubtitleBytes } from "@/lib/subtitles/encoding";
+import {
+  SubtitlePreparationError,
+  SUBTITLE_PREPARATION_LIMITS,
+  prepareSubtitle,
+} from "@/lib/subtitles/prepare";
+import { readNonNetworkSubtitleBytes } from "@/lib/subtitles/save-to-disk";
 import { stripSdhText } from "@/lib/subtitles/sdh-filter";
 import { subtitleTrackDownloadHeaders } from "@/lib/subtitles/provider-auth";
 import { takePreparedSubtitle } from "@/lib/subtitles/prepared-registry";
@@ -168,6 +174,7 @@ export function createHtml5Bridge(): PlayerBridge {
       selected: t.id === activeSubId,
       secondary: t.id === secondarySubId,
       external: t.external,
+      imported: t.metadata?.imported,
       prepared: t.metadata?.prepared === true || (t.cues != null && t.cues.length > 0),
       autoSelectionEligible: t.metadata?.autoSelectionEligible,
       url: t.originalUrl ?? t.url,
@@ -330,7 +337,12 @@ export function createHtml5Bridge(): PlayerBridge {
           };
           clearPendingSub(track.originalUrl ?? track.url);
         } else {
-          const cues = await fetchAndParse(track.url, { ...track.metadata, lang: track.lang });
+          const options = { ...track.metadata, lang: track.lang };
+          const bytes = await readNonNetworkSubtitleBytes(
+            track.url,
+            SUBTITLE_PREPARATION_LIMITS.subtitleFileBytes,
+          );
+          const cues = parseSubtitle(decodeSubtitleBytes(bytes, options), options.format);
           if (requestMediaRevision !== mediaRevision || !subTracks.includes(track)) return false;
           track.cues = cues;
         }
@@ -573,17 +585,6 @@ export function createHtml5Bridge(): PlayerBridge {
         if (activeSubId === oldTrack.id) activeSubId = null;
       }
     }
-    let resolvedUrl = url;
-    if (
-      !/^(https?|blob|data):/i.test(url) &&
-      typeof window !== "undefined" &&
-      "__TAURI_INTERNALS__" in window
-    ) {
-      try {
-        const { convertFileSrc } = await import("@tauri-apps/api/core");
-        resolvedUrl = convertFileSrc(url);
-      } catch {}
-    }
     if (requestMediaRevision !== mediaRevision) {
       prepared?.cleanup();
       return false;
@@ -595,7 +596,7 @@ export function createHtml5Bridge(): PlayerBridge {
     }
     const track: SubTrack = {
       id,
-      url: resolvedUrl,
+      url,
       originalUrl: metadata?.originalUrl ?? url,
       lang: addLang,
       title,
@@ -615,7 +616,7 @@ export function createHtml5Bridge(): PlayerBridge {
       cleanup: prepared?.cleanup,
     };
     subTracks.push(track);
-    noteSubtitleOrigin(resolvedUrl, url);
+    noteSubtitleOrigin(url, sourceUrl);
     if (selectionRequest) {
       let loaded: boolean;
       try {

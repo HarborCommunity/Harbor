@@ -43,7 +43,7 @@ export function VariantRow({
   const tr = useT();
   const { openAt } = useContextMenu();
   const imported = useImportedSubs();
-  const isImported = !!track.title && imported.has(track.title);
+  const isImported = track.imported || (!!track.title && imported.has(track.title));
   const tags: { label: string; tone: "warn" | "info" | "default" }[] = subtitleClassificationLabels(
     track,
     tr,

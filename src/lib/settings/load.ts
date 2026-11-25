@@ -562,6 +562,10 @@ export function parseStoredSettings(raw: string | null): {
         ...parsed.letterboxd,
       },
       preferredSubLangs: (parsed.preferredSubLangs ?? DEFAULT.preferredSubLangs).map(languageName),
+      localSubtitleFolder:
+        typeof parsed.localSubtitleFolder === "string"
+          ? parsed.localSubtitleFolder
+          : DEFAULT.localSubtitleFolder,
       preferredAudioLangs: (parsed.preferredAudioLangs ?? DEFAULT.preferredAudioLangs).map((lang) =>
         lang === ORIGINAL_AUDIO_LANG ? lang : languageName(lang),
       ),

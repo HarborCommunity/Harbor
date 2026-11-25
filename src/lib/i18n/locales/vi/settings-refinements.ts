@@ -789,6 +789,11 @@ const settingsRefinements: Record<string, string> = {
   "The settings sidebar uses a separate icon set, not drawn by Abiyyu.":
     "Thanh bên cài đặt sử dụng một bộ biểu tượng riêng, không do Abiyyu vẽ.",
   "Controller button glyphs:": "Ký hiệu nút tay cầm:",
+  "Local subtitles": "Phụ đề cục bộ",
+  "Choose a folder to automatically load matching subtitles for movies and episodes.":
+    "Chọn một thư mục để tự động tải phụ đề phù hợp cho phim và tập phim.",
+  "Subtitle folder": "Thư mục phụ đề",
+  "No folder selected": "Chưa chọn thư mục",
 };
 
 export default settingsRefinements;

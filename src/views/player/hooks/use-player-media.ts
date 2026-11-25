@@ -168,6 +168,8 @@ export function usePlayerMedia(params: {
     subtitlePreflightSettled,
   } = useTrackAutoload({
     bridgeRef,
+    bridgeReady,
+    bridgeKey,
     src,
     snap,
     engine,

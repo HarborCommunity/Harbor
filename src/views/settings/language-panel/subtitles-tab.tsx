@@ -3,6 +3,7 @@ import { useT } from "@/lib/i18n";
 import { Section, ToggleRow } from "../shared";
 import { LanguagesPicker } from "../streaming-panel";
 import { DualSubtitleSection } from "./dual-subtitle-section";
+import { LocalSubtitlesSection } from "./local-subtitles-section";
 
 export function SubtitlesLanguageTab() {
   const { settings, update } = useSettings();
@@ -20,6 +21,10 @@ export function SubtitlesLanguageTab() {
       </Section>
 
       <DualSubtitleSection />
+      <LocalSubtitlesSection
+        folder={settings.localSubtitleFolder}
+        onChange={(folder) => update({ localSubtitleFolder: folder })}
+      />
 
       <Section
         title={t("Choosing a track")}

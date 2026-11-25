@@ -117,6 +117,7 @@ type ExternalSubtitleMetadata = {
   provider?: string;
   providerDerived?: boolean;
   localTrusted?: boolean;
+  imported?: boolean;
   fps?: number;
   downloads?: number;
   author?: string;
@@ -911,6 +912,7 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
         channelCount,
         title: extMeta?.title || title,
         external,
+        imported: extMeta?.imported,
         prepared: extMeta?.prepared,
         autoSelectionEligible: extMeta?.autoSelectionEligible,
         externalFilename,
@@ -1948,6 +1950,7 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
         provider: metadata?.provider,
         providerDerived: metadata?.providerDerived,
         localTrusted: metadata?.localTrusted,
+        imported: metadata?.imported,
         fps: metadata?.fps,
         downloads: metadata?.downloads,
         author: metadata?.author,

@@ -6,6 +6,7 @@ type SubtitleTrackLabelInput = {
   title?: string;
   codec?: string;
   external?: boolean;
+  imported?: boolean;
 };
 
 function hasUnknownLanguage(lang: string | undefined): boolean {
@@ -14,6 +15,7 @@ function hasUnknownLanguage(lang: string | undefined): boolean {
 }
 
 export function subtitleTrackLanguageLabel(track: SubtitleTrackLabelInput): string {
+  if (track.imported) return "Unknown";
   if (hasUnknownLanguage(track.lang)) return track.external ? "Unknown" : "Embedded";
   return languageName(track.lang!);
 }

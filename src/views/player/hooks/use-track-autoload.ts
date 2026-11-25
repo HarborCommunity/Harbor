@@ -43,6 +43,10 @@ import type { PlayerSrc } from "@/lib/view";
 import type { Settings } from "@/lib/settings";
 import { canStartSubtitleAutoload, subtitleSearchImdbId } from "@/lib/subtitles/autoload";
 import {
+  localSubtitleTakesPrecedence,
+  matchesLocalPath,
+} from "@/lib/subtitles/local-subtitle-autoload";
+import {
   SubtitleAutoloadRunCoordinator,
   subtitleAutoloadLateSelectionAllowed,
   subtitleAutoloadSelectionLeaseValid,
@@ -64,15 +68,19 @@ import {
   subtitleStreamKey,
 } from "@/lib/subtitles/subtitle-memory";
 
+import { useLocalSubtitleAutoload } from "./use-local-subtitle-autoload";
+
 export function useTrackAutoload(params: {
   bridgeRef: RefObject<PlayerBridge | null>;
+  bridgeReady: boolean;
+  bridgeKey: string | number;
   src: PlayerSrc;
   snap: PlayerSnapshot;
   engine: "html5" | "mpv";
   settings: Settings;
   authKey: string | null;
 }) {
-  const { bridgeRef, src, snap, engine, settings, authKey } = params;
+  const { bridgeRef, bridgeReady, bridgeKey, src, snap, engine, settings, authKey } = params;
   const playbackActor = capturePlaybackActor();
   const actorKey = JSON.stringify(playbackActor);
   const sourceKey = playbackSourceKey(src);
@@ -290,6 +298,20 @@ export function useTrackAutoload(params: {
   const autoSubIdRef = useRef<string | null>(null);
   const autoSubSourceRef = useRef<string | null>(null);
   const autoAudioIdRef = useRef<string | null>(null);
+  const localSubRef = useLocalSubtitleAutoload({
+    actorKey,
+    bridgeKey,
+    bridgeReady,
+    bridgeRef,
+    hasRememberedSubtitle:
+      rememberedSession?.subtitle != null &&
+      (src.continuation != null ||
+        rememberedSession.subtitle.external === true ||
+        rememberedSession.subtitle.off === true),
+    settings,
+    snap,
+    src,
+  });
   useEffect(() => {
     autoSubRunRef.current.invalidate();
     autoSubLoadKeyRef.current = null;
@@ -415,15 +437,18 @@ export function useTrackAutoload(params: {
         revision: subtitleSelectionStateRef.current.revision,
         selectedId: subtitleSelectionStateRef.current.selectedId,
       };
-      const shouldAutoSelectForStage = (lateHash: boolean) => {
+      const shouldAutoSelectForStage = (lateHash: boolean, language?: string) => {
         if (bridgeRef.current?.canAutoSelectSubtitle?.() === false) return false;
         const state = subtitleSelectionStateRef.current;
         const currentTrack = snapRef.current.subtitleTracks.find((track) => track.selected) ?? null;
         const currentSelected = currentTrack?.id ?? null;
         const autoSource = autoSubSourceRef.current;
+        const local = localSubRef.current;
+        const localSelected = local != null && matchesLocalPath(currentTrack, local.path);
         const currentSelectionIsAutomatic =
           currentSelected != null &&
-          (currentSelected === autoSubIdRef.current ||
+          (localSelected ||
+            currentSelected === autoSubIdRef.current ||
             (autoSource != null &&
               (currentTrack?.originalUrl === autoSource || currentTrack?.url === autoSource)));
         const selectionLeaseValid = subtitleAutoloadSelectionLeaseValid({
@@ -444,6 +469,15 @@ export function useTrackAutoload(params: {
         const selectionLangs = prefs?.subLang
           ? [prefs.subLang, ...langs.filter((lang) => lang !== prefs.subLang)]
           : langs;
+        const keepLocal =
+          local != null &&
+          (local.pending || localSelected) &&
+          localSubtitleTakesPrecedence(
+            local.language,
+            { lang: language, external: true },
+            selectionLangs,
+            settings.preferEmbeddedSubs,
+          );
         // The embedded-source preference must gate downloaded candidates too, or a
         // prepared external track would replace the embedded track Harbor selected
         // from the same preferences moments earlier.
@@ -454,6 +488,7 @@ export function useTrackAutoload(params: {
         );
         return (
           isActive() &&
+          !keepLocal &&
           !keepEmbedded &&
           !src.subtitlePreselect &&
           !rememberedSession?.subtitle &&
@@ -468,8 +503,9 @@ export function useTrackAutoload(params: {
           selectionLeaseValid
         );
       };
-      const shouldAutoSelect = () => shouldAutoSelectForStage(false);
-      const shouldAutoSelectLateHash = () => shouldAutoSelectForStage(true);
+      const shouldAutoSelect = (language?: string) => shouldAutoSelectForStage(false, language);
+      const shouldAutoSelectLateHash = (language?: string) =>
+        shouldAutoSelectForStage(true, language);
       refetchRef.current = async () => {
         const bridge = bridgeRef.current;
         if (!bridge || !isActive()) return 0;
@@ -981,10 +1017,19 @@ export function useTrackAutoload(params: {
       subLangs.length > 0
     ) {
       const current = snap.subtitleTracks.find((t) => t.selected) ?? null;
+
+      const local = localSubRef.current;
+      const localSelected = local != null && matchesLocalPath(current, local.path);
       const userPicked =
-        current != null && autoSubIdRef.current != null && current.id !== autoSubIdRef.current;
+        current != null &&
+        !localSelected &&
+        autoSubIdRef.current != null &&
+        current.id !== autoSubIdRef.current;
       const lockedToAuto =
-        current != null && autoSubIdRef.current != null && !settings.subtitleAutoUpgrade;
+        current != null &&
+        !localSelected &&
+        autoSubIdRef.current != null &&
+        !settings.subtitleAutoUpgrade;
       if (!userPicked && !lockedToAuto) {
         const want = pickAutomaticSubtitle(
           snap.subtitleTracks,
@@ -993,7 +1038,11 @@ export function useTrackAutoload(params: {
           settings,
           allow,
         );
-        if (want) {
+        const keepLocal =
+          local != null &&
+          (local.pending || localSelected) &&
+          localSubtitleTakesPrecedence(local.language, want, subLangs, settings.preferEmbeddedSubs);
+        if (want && !keepLocal) {
           if (want.id !== current?.id) bridgeRef.current?.setSubtitleTrack(want.id, "automatic");
           autoSubIdRef.current = want.id;
         }

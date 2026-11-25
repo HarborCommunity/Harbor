@@ -400,6 +400,7 @@ export type Settings = {
   mangaUpscaleQuality: "fast" | "best";
   mangaUpscaleAutoDownload: boolean;
   preferredSubLangs: string[];
+  localSubtitleFolder: string;
   preferredAudioLangs: string[];
   subFontSize: number;
   subFontColor: string;

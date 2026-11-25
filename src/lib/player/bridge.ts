@@ -15,6 +15,7 @@ export type TrackInfo = {
   channelCount?: number;
   title?: string;
   external?: boolean;
+  imported?: boolean;
   prepared?: boolean;
   autoSelectionEligible?: boolean;
   externalFilename?: string;

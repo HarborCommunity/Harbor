@@ -768,6 +768,11 @@ const settingsRefinements: Record<string, string> = {
   "The settings sidebar uses a separate icon set, not drawn by Abiyyu.":
     "सेटिंग्स के साइडबार में एक अलग आइकन सेट इस्तेमाल होता है, जिसे Abiyyu ने नहीं बनाया है।",
   "Controller button glyphs:": "कंट्रोलर के बटन चिह्न:",
+  "Local subtitles": "स्थानीय सबटाइटल",
+  "Choose a folder to automatically load matching subtitles for movies and episodes.":
+    "फ़िल्मों और एपिसोड के लिए मेल खाने वाले सबटाइटल अपने आप लोड करने के लिए एक फ़ोल्डर चुनें।",
+  "Subtitle folder": "सबटाइटल फ़ोल्डर",
+  "No folder selected": "कोई फ़ोल्डर नहीं चुना गया",
 };
 
 export default settingsRefinements;

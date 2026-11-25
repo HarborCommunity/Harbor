@@ -811,6 +811,11 @@ const settingsRefinements: Record<string, string> = {
   "The settings sidebar uses a separate icon set, not drawn by Abiyyu.":
     "Die Seitenleiste der Einstellungen verwendet einen separaten Symbolsatz, der nicht von Abiyyu gezeichnet wurde.",
   "Controller button glyphs:": "Controller-Tastensymbole:",
+  "Local subtitles": "Lokale Untertitel",
+  "Choose a folder to automatically load matching subtitles for movies and episodes.":
+    "Wähle einen Ordner aus, um passende Untertitel für Filme und Folgen automatisch zu laden.",
+  "Subtitle folder": "Untertitelordner",
+  "No folder selected": "Kein Ordner ausgewählt",
 };
 
 export default settingsRefinements;

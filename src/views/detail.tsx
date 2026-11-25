@@ -1905,6 +1905,7 @@ function DetailContent({
             meta.name,
             cinemetaFull?.name,
             detail?.originalTitle,
+            ...(detail?.altTitles ?? []),
             ...(meta.alternateTitles ?? []),
           ].filter(
             (candidate): candidate is string =>
@@ -1935,6 +1936,7 @@ function DetailContent({
       detail?.releaseDate,
       detail?.year,
       detail?.originalTitle,
+      detail?.altTitles,
       detail?.originalLanguage,
       cinemetaFull?.name,
       cinemetaFull?.releaseInfo,

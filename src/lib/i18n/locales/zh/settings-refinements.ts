@@ -742,6 +742,11 @@ const settingsRefinements: Record<string, string> = {
   "The settings sidebar uses a separate icon set, not drawn by Abiyyu.":
     "设置侧边栏使用独立的图标集，并非由 Abiyyu 绘制。",
   "Controller button glyphs:": "控制器按钮图标：",
+  "Local subtitles": "本地字幕",
+  "Choose a folder to automatically load matching subtitles for movies and episodes.":
+    "选择文件夹后，Harbor 会自动加载与电影和剧集匹配的字幕。",
+  "Subtitle folder": "字幕文件夹",
+  "No folder selected": "未选择文件夹",
 };
 
 export default settingsRefinements;

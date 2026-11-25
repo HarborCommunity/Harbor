@@ -797,6 +797,11 @@ const settingsRefinements: Record<string, string> = {
   "The settings sidebar uses a separate icon set, not drawn by Abiyyu.":
     "В боковой панели настроек используется отдельный набор значков, нарисованный не Abiyyu.",
   "Controller button glyphs:": "Символы кнопок контроллера:",
+  "Local subtitles": "Локальные субтитры",
+  "Choose a folder to automatically load matching subtitles for movies and episodes.":
+    "Выберите папку, чтобы автоматически загружать подходящие субтитры к фильмам и сериям.",
+  "Subtitle folder": "Папка субтитров",
+  "No folder selected": "Папка не выбрана",
 };
 
 export default settingsRefinements;

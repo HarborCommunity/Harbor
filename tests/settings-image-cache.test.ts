@@ -120,6 +120,17 @@ test("saved official relay URLs migrate while custom relays and disabled setting
   }
 });
 
+test("stored local subtitle folders preserve exact paths and reject non-string values", () => {
+  const f = fixture();
+  const folder = "/media/أفلام/字幕 ";
+  f.data.set("harbor.settings", f.complete({ localSubtitleFolder: folder }));
+  assert.equal(f.settings.loadStoredSettings().localSubtitleFolder, folder);
+  for (const value of [undefined, null, 100, ["folder"]]) {
+    f.data.set("harbor.settings", f.complete({ localSubtitleFolder: value }));
+    assert.equal(f.settings.loadStoredSettings().localSubtitleFolder, "");
+  }
+});
+
 test("unchanged self-contained settings and image priorities reuse their cached values", () => {
   const f = fixture();
   f.data.set("harbor.settings", f.complete({ tmdbImageLangs: ["Arabic", "Original", "English"] }));

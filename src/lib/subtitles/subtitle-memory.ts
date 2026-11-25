@@ -231,6 +231,7 @@ export function rememberedSubtitleLoadMetadata(
     downloadAuth,
     release: remembered.release,
     provider: remembered.provider,
+    imported: (remembered.imported === true && rememberedSubtitleIsLocal(remembered)) || undefined,
     localTrusted: remembered.localTrusted === true || undefined,
     providerDerived:
       remembered.localTrusted === true
