@@ -794,6 +794,11 @@ const settingsRefinements: Record<string, string> = {
   "The settings sidebar uses a separate icon set, not drawn by Abiyyu.":
     "Bilah samping pengaturan menggunakan set ikon terpisah yang tidak digambar oleh Abiyyu.",
   "Controller button glyphs:": "Simbol tombol pengontrol:",
+  "Local subtitles": "Subtitle lokal",
+  "Choose a folder to automatically load matching subtitles for movies and episodes.":
+    "Pilih folder untuk memuat otomatis subtitle yang cocok untuk film dan episode.",
+  "Subtitle folder": "Folder subtitle",
+  "No folder selected": "Belum ada folder yang dipilih",
 };
 
 export default settingsRefinements;

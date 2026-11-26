@@ -800,6 +800,11 @@ const settingsRefinements: Record<string, string> = {
   "The settings sidebar uses a separate icon set, not drawn by Abiyyu.":
     "A barra lateral das configurações usa um conjunto separado de ícones, que não foi desenhado por Abiyyu.",
   "Controller button glyphs:": "Símbolos dos botões dos controles:",
+  "Local subtitles": "Legendas locais",
+  "Choose a folder to automatically load matching subtitles for movies and episodes.":
+    "Escolha uma pasta para carregar automaticamente as legendas correspondentes a filmes e episódios.",
+  "Subtitle folder": "Pasta de legendas",
+  "No folder selected": "Nenhuma pasta selecionada",
 };
 
 export default settingsRefinements;

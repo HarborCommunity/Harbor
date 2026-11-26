@@ -75,7 +75,7 @@ export type SubFetchParams = {
   getAudioMap?: () => string | undefined;
   deep?: boolean;
   autoSelect?: boolean;
-  shouldAutoSelect?: () => boolean;
+  shouldAutoSelect?: (language?: string) => boolean;
   providers?: {
     opensubtitles?: boolean;
     wyzie?: boolean;
@@ -427,7 +427,7 @@ export async function fetchSubtitlesIntoPlayer(
       if (!p.isActive()) break;
       const autoSelectionEligible = preparedCandidateAutoSelectionEligible(item, {
         autoSelect: p.autoSelect !== false && selected == null,
-        selectionLeaseValid: p.shouldAutoSelect?.() ?? true,
+        selectionLeaseValid: p.shouldAutoSelect?.(item.candidate.lang) ?? true,
       });
       const shouldSelect = selected == null && preferred != null && autoSelectionEligible;
       registerPreparedSubtitle(item.prepared);

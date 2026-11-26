@@ -44,7 +44,8 @@ export function MenuBody(props: SubtitleMenuProps & { onClose: () => void }) {
 
     const keep = new Set(filtered);
     for (const t of tracks) {
-      const isImported = hasImportedSubTitle(t.title) || importedTitles.has(t.title ?? "");
+      const isImported =
+        t.imported || hasImportedSubTitle(t.title) || importedTitles.has(t.title ?? "");
       // A generated subtitle ("Make Hindi") has no real language code, so the preferred
       // language filter would drop it the moment it stops being selected. Keep it visible
       // so the translated track stays reachable once it has been added.

@@ -5177,6 +5177,13 @@ const SETTINGS_OPTIONS: SettingsOption[] = [
     ],
   },
   {
+    label: "Local subtitles",
+    section: "subtitles",
+    tab: "languages",
+    anchorTitle: "Local subtitles",
+    keywords: ["subtitle folder", "local captions", "automatic local subtitles", "subtitle files"],
+  },
+  {
     label: "Start with subtitles off",
     section: "subtitles",
     tab: "languages",

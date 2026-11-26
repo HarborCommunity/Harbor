@@ -13,6 +13,8 @@ import * as trackPreferences from "../src/lib/player/track-preferences";
 import * as audioLanguage from "../src/lib/player/audio-language";
 import * as language from "../src/lib/subtitles/language";
 import { initialPlayerSnapshot, type PlayerStatus, type TrackInfo } from "../src/lib/player/bridge";
+import * as localSubtitleAutoload from "../src/lib/subtitles/local-subtitle-autoload";
+import { useLocalSubtitleAutoload } from "../src/views/player/hooks/use-local-subtitle-autoload";
 
 const tracks: TrackInfo[] = [
   {
@@ -97,6 +99,8 @@ async function fixture(remembered = true) {
       canStartSubtitleAutoload: () => false,
       subtitleSearchImdbId: () => null,
     },
+    "@/lib/subtitles/local-subtitle-autoload": localSubtitleAutoload,
+    "./use-local-subtitle-autoload": { useLocalSubtitleAutoload },
     "@/lib/subtitles/autoload-run": {
       SubtitleAutoloadRunCoordinator: class {
         invalidate() {}
@@ -155,6 +159,8 @@ async function fixture(remembered = true) {
   }) {
     exports.useTrackAutoload({
       bridgeRef,
+      bridgeKey: "mpv",
+      bridgeReady: true,
       src,
       settings,
       engine: "mpv",

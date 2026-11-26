@@ -795,6 +795,11 @@ const settingsRefinements: Record<string, string> = {
   "The settings sidebar uses a separate icon set, not drawn by Abiyyu.":
     "設定のサイドバーには、Abiyyu が描いたものとは別のアイコンセットを使用しています。",
   "Controller button glyphs:": "コントローラーのボタンアイコン：",
+  "Local subtitles": "ローカル字幕",
+  "Choose a folder to automatically load matching subtitles for movies and episodes.":
+    "フォルダーを選択すると、映画やエピソードに対応する字幕を自動で読み込みます。",
+  "Subtitle folder": "字幕フォルダー",
+  "No folder selected": "フォルダーが選択されていません",
 };
 
 export default settingsRefinements;

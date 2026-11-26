@@ -798,6 +798,11 @@ const settingsRefinements: Record<string, string> = {
   "The settings sidebar uses a separate icon set, not drawn by Abiyyu.":
     "Panel boczny ustawień korzysta z osobnego zestawu ikon, których nie narysował Abiyyu.",
   "Controller button glyphs:": "Symbole przycisków kontrolera:",
+  "Local subtitles": "Napisy lokalne",
+  "Choose a folder to automatically load matching subtitles for movies and episodes.":
+    "Wybierz folder, aby automatycznie wczytywać pasujące napisy do filmów i odcinków.",
+  "Subtitle folder": "Folder napisów",
+  "No folder selected": "Nie wybrano folderu",
 };
 
 export default settingsRefinements;

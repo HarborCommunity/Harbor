@@ -108,6 +108,7 @@ export type SubtitleLoadMetadata = {
   localTrusted?: boolean;
   prepared?: boolean;
   autoSelectionEligible?: boolean;
+  imported?: boolean;
   originalUrl?: string;
   /**
    * The source advertises that the same URL can later serve a richer/updated file
