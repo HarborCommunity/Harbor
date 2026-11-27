@@ -46,6 +46,10 @@ const FILES = [
   [join(APP, "binaries", "ffprobe-x86_64-pc-windows-msvc.exe"), "ffprobe.exe"],
   [join(APP, "binaries", "yt-dlp-x86_64-pc-windows-msvc.exe"), "yt-dlp.exe"],
   [join(APP, "libmpv", "libmpv-2.dll"), "libmpv-2.dll"],
+  // harbor.exe imports MSVCP140.dll; app-local copies let it start without the VC++ redistributable.
+  [join(APP, "vcruntime", "msvcp140.dll"), "msvcp140.dll"],
+  [join(APP, "vcruntime", "vcruntime140.dll"), "vcruntime140.dll"],
+  [join(APP, "vcruntime", "vcruntime140_1.dll"), "vcruntime140_1.dll"],
   [UNINSTALLER, "uninstall.exe"],
 ];
 

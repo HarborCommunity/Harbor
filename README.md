@@ -453,7 +453,7 @@ Harbor is a Tauri 2 app: a React + TypeScript frontend and a Rust shell, with th
 - [`wasm-pack`](https://rustwasm.github.io/wasm-pack/) (only needed to rebuild the WASM stream core)
 
 > [!IMPORTANT]
-> Before your first build, run `pnpm run setup`. It fetches the native sidecars (libmpv, mpv, yt-dlp, ffmpeg, ffprobe) and bundled fonts into `src-tauri/`. These are platform specific and not committed, so a fresh clone will not build without this step. On Linux, extracting the ffmpeg static build needs `tar` and `xz`; on Windows, extracting mpv needs [7-Zip](https://www.7-zip.org/) (`7z` on `PATH`).
+> Before your first build, run `pnpm run setup`. It fetches the native sidecars (libmpv, mpv, yt-dlp, ffmpeg, ffprobe) and bundled fonts into `src-tauri/`. These are platform specific and not committed, so a fresh clone will not build without this step. On Linux, extracting the ffmpeg static build needs `tar` and `xz`; on Windows, extracting mpv needs [7-Zip](https://www.7-zip.org/) (`7z` on `PATH`), and the VC++ runtime DLLs are copied from the Visual Studio C++ build tools (`VC\Redist\MSVC`).
 
 <details>
 <summary><b>Run in development</b></summary>
