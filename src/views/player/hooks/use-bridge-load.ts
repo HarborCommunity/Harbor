@@ -14,7 +14,8 @@ import { isPlaybackActorCurrent } from "@/lib/playback-history";
 import { initialTrackSelector } from "@/lib/player/track-preferences";
 
 const RESUME_PROMPT_MIN_SEC = 30;
-const RESTART_THRESHOLD = 0.8;
+// Same ratio that marks an episode watched (PLAYBACK_FINISH_RATIO), so anything still unwatched resumes.
+const RESTART_THRESHOLD = 0.85;
 
 export function useBridgeLoad(params: {
   bridgeRef: RefObject<PlayerBridge | null>;
