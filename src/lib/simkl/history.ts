@@ -29,7 +29,7 @@ type RawAllItems = { movies?: RawEntry[]; shows?: RawEntry[]; anime?: RawEntry[]
 
 type HistoryAddResponse = {
   added?: { movies?: number; shows?: number; episodes?: number };
-  not_found?: { movies?: unknown[]; shows?: unknown[]; episodes?: unknown[] };
+  not_found?: { movies?: unknown[]; shows?: unknown[]; anime?: unknown[]; episodes?: unknown[] };
 };
 
 // Simkl deduplicates history: re-adding something already watched is a silent
@@ -40,12 +40,12 @@ type HistoryAddResponse = {
 // the user removed from their history.
 function historyWriteLanded(
   r: HistoryAddResponse | undefined,
-  bucket: "movies" | "shows",
+  bucket: "movies" | "shows" | "anime",
 ): boolean {
   if (!r) return false;
   if (r.not_found?.[bucket]?.length) return false;
   // A show-bucket write can also single out episodes that failed to resolve.
-  if (bucket === "shows" && r.not_found?.episodes?.length) return false;
+  if (bucket !== "movies" && r.not_found?.episodes?.length) return false;
   return true;
 }
 
@@ -135,6 +135,7 @@ async function postHistory(target: SimklTarget): Promise<boolean> {
           shows: [
             {
               ids: target.show.ids,
+              use_tvdb_anime_seasons: true,
               seasons: [
                 {
                   number: target.season,
@@ -189,6 +190,7 @@ export async function markEpisodesWatched(
         shows: [
           {
             ids: show,
+            use_tvdb_anime_seasons: true,
             seasons: [
               {
                 number: season,
@@ -200,6 +202,29 @@ export async function markEpisodesWatched(
       },
     });
     return historyWriteLanded(result, "shows");
+  } catch {
+    return false;
+  }
+}
+
+/** Native anime ids take Simkl's anime envelope with entry-relative numbers and no season. */
+export async function markAnimeEpisodesWatched(
+  anime: SimklIds,
+  episodes: number[],
+): Promise<boolean> {
+  if (episodes.length === 0) return false;
+  const watchedAt = new Date().toISOString();
+  try {
+    invalidateHistoryCache();
+    const result = await simklRequest<HistoryAddResponse>("/sync/history", {
+      method: "POST",
+      body: {
+        anime: [
+          { ids: anime, episodes: episodes.map((n) => ({ number: n, watched_at: watchedAt })) },
+        ],
+      },
+    });
+    return historyWriteLanded(result, "anime");
   } catch {
     return false;
   }
@@ -227,6 +252,7 @@ export async function unmarkEpisodesWatched(
         shows: [
           {
             ids: show,
+            use_tvdb_anime_seasons: true,
             seasons: [{ number: season, episodes: episodes.map((n) => ({ number: n })) }],
           },
         ],
