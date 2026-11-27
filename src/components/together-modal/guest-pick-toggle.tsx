@@ -1,9 +1,9 @@
-import { ListChecks, PlayCircle, WifiOff, type LucideIcon } from "lucide-react";
+import { ListChecks, Lock, PlayCircle, WifiOff, type LucideIcon } from "lucide-react";
 import { useSettings } from "@/lib/settings";
 import { useKnobAnim } from "@/lib/knob-anim";
 import { useT } from "@/lib/i18n";
 
-type RoomSettingKey = "togetherGuestsPick" | "togetherAutoStart";
+type RoomSettingKey = "togetherGuestsPick" | "togetherAutoStart" | "togetherHostOnlyControls";
 
 function RoomSettingToggle(props: {
   setting: RoomSettingKey;
@@ -64,6 +64,18 @@ export function AutoStartToggle() {
       icon={PlayCircle}
       title={t("Start when everyone is ready")}
       description={t("Counts down, then plays for the room")}
+    />
+  );
+}
+
+export function HostOnlyToggle() {
+  const t = useT();
+  return (
+    <RoomSettingToggle
+      setting="togetherHostOnlyControls"
+      icon={Lock}
+      title={t("Only I control playback")}
+      description={t("Guests can't play, pause or skip")}
     />
   );
 }

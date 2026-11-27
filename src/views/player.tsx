@@ -61,6 +61,7 @@ import { EXTERNAL_PLAYER_CLOSED_EVENT } from "@/lib/player/external-mpv";
 import { useRoomSync } from "./player/hooks/use-room-sync";
 import { setHostMove } from "@/lib/together/host-move";
 import { playbackKey } from "@/lib/together/client";
+import { useRoomActivityNotice } from "./player/hooks/use-room-activity-notice";
 import { useHostSource } from "./player/hooks/use-host-source";
 import { useLobbyGate } from "./player/hooks/use-lobby-gate";
 import type { RoomSyncPillNotice } from "./player/room-sync-pill";
@@ -339,6 +340,8 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
   const canControl = !inRoom || hasStarted;
   const guestPickRef = useRef(settings.togetherGuestsPick);
   guestPickRef.current = settings.togetherGuestsPick;
+  const hostOnlyRef = useRef(settings.togetherHostOnlyControls);
+  hostOnlyRef.current = settings.togetherHostOnlyControls;
 
   usePauseOnInactive({ bridgeRef, snapRef });
 
@@ -576,6 +579,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     liveStreamRef,
     snap,
     guestPickRef,
+    hostOnlyRef,
     publishState,
   });
   const guestHostSource =
@@ -608,6 +612,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     snapRef,
     hostSourceRef,
     guestPickRef,
+    hostOnlyRef,
     publishState,
   });
 
@@ -832,6 +837,8 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     waitingFor,
     skipWaiting,
     keepWatching,
+    activity: roomActivity,
+    noteLocalAction,
   } = useRoomSync({
     inRoom,
     isHost,
@@ -845,6 +852,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     bridgeRef,
     hostSourceRef,
     guestPickRef,
+    hostOnlyRef,
     publishState,
     onIncomingState,
     onIncomingCommand,
@@ -934,6 +942,16 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     t,
   ]);
 
+  const activityNotice = useRoomActivityNotice({
+    inRoom,
+    isHost,
+    hasStarted,
+    participants: roomSnapshot.participants,
+    hostClientId: roomSnapshot.hostClientId,
+    hostOnly: roomSnapshot.syncState?.hostOnly === true,
+    activity: roomActivity,
+  });
+
   const { rememberSubChoice, cycleSubtitles, playPauseToggle, seekStep, seekTo } =
     usePlaybackControls({
       bridgeRef,
@@ -950,6 +968,9 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
       togglePlayCast: cast.togglePlayCast,
       seekCast: cast.seekCast,
       sendCommand,
+      controlLocked: roomSnapshot.syncState?.hostOnly === true,
+      onControlLocked: activityNotice.showLockedOut,
+      onRoomAction: noteLocalAction,
     });
 
   returnToPlayerRef.current = async (options = {}) => {
@@ -1664,6 +1685,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     onCancelAutoStart: lobby.cancelAutoStart,
     syncNotice: roomSyncNotice?.notice ?? null,
     onKeepWatching: roomSyncNotice?.onKeepWatching,
+    activityNotice: activityNotice.notice,
     onStart: lobby.startHost,
     onPlayWithoutSync: lobby.playWithoutSync,
     guestHostSource,

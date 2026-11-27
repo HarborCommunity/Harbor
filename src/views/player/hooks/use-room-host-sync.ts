@@ -5,6 +5,8 @@ import type { PartialSyncState } from "@/lib/together/provider";
 import type { RoomSnapshot } from "@/lib/together/client";
 import {
   RELAY_SYNC_STATUS_VERSION,
+  type PlaybackAction,
+  type PlaybackCause,
   type RoomCommand,
   type SourceDescriptor,
 } from "@/lib/together/protocol";
@@ -31,6 +33,16 @@ export type DropPolicy = "keep-playing" | "auto" | "always";
 const CAST_PUBLISH_MS = 1000;
 /** mpv can still report "playing" briefly after the room-wait pause. */
 const WAIT_PAUSE_SETTLE_MS = 1500;
+/** A requested play, pause or seek that has not shown up in playback by then caused nothing. */
+const CAUSE_MAX_AGE_MS = 3000;
+
+/** Someone in the room played, paused or seeked. */
+export type RoomActivity = {
+  by: string;
+  action: PlaybackAction;
+  positionSeconds?: number;
+  at: number;
+};
 
 type CastSync = {
   activeRef: RefObject<boolean>;
@@ -59,8 +71,12 @@ export function useRoomHostSync(params: {
   bridgeRef: RefObject<PlayerBridge | null>;
   hostSourceRef: RefObject<SourceDescriptor | null>;
   guestPickRef: RefObject<boolean>;
+  /** Only the host controls playback: guests' commands are ignored. */
+  hostOnlyRef?: RefObject<boolean>;
   publishState: (state: PartialSyncState) => void;
   onIncomingCommand: (cb: (from: string, command: RoomCommand) => void) => () => void;
+  /** A guest's command was applied. */
+  onActivity?: (activity: RoomActivity) => void;
   dropPolicy?: DropPolicy;
   /** Set by a guest who chose "Keep watching" and took over: don't wait for who dropped. */
   skipDroppedRef?: RefObject<boolean>;
@@ -71,6 +87,8 @@ export function useRoomHostSync(params: {
   skipWaiting: () => void;
   /** When the host's own scheduled start happens, so the host sees the countdown too. */
   countdownAt: number | null;
+  /** The host's own play, pause or seek, so guests see who made it. */
+  noteLocalAction: (action: PlaybackAction) => void;
 } {
   const {
     inRoom,
@@ -83,8 +101,10 @@ export function useRoomHostSync(params: {
     bridgeRef,
     hostSourceRef,
     guestPickRef,
+    hostOnlyRef,
     publishState,
     onIncomingCommand,
+    onActivity,
     dropPolicy = "keep-playing",
     skipDroppedRef,
     cast,
@@ -139,10 +159,40 @@ export function useRoomHostSync(params: {
       source: hostSourceRef.current ?? undefined,
       guestPick: guestPickRef.current || undefined,
       waitOnDrop: waitOnDropRef.current || undefined,
+      hostOnly: hostOnlyRef?.current || undefined,
     };
   };
 
-  const publishAnchor = (anchor: PublishedAnchor, now: number, playAt?: number) => {
+  // Who asked for the change the next published anchor shows: the host itself,
+  // or the guest whose command it applied.
+  const pendingCauseRef = useRef<{ by: string; action: PlaybackAction; at: number } | null>(null);
+  const causeIdRef = useRef(Date.now());
+  const noteAction = (by: string, action: PlaybackAction) => {
+    pendingCauseRef.current = { by, action, at: Date.now() };
+  };
+  const takeCause = (actions: PlaybackAction[], now: number): PlaybackCause | undefined => {
+    const pending = pendingCauseRef.current;
+    if (!pending || now - pending.at > CAUSE_MAX_AGE_MS) {
+      pendingCauseRef.current = null;
+      return undefined;
+    }
+    if (!actions.includes(pending.action)) return undefined;
+    pendingCauseRef.current = null;
+    causeIdRef.current += 1;
+    return { by: pending.by, action: pending.action, id: causeIdRef.current };
+  };
+
+  // The latest cause rides along with heartbeats, so a late look at the room
+  // still shows who paused; the next change replaces it.
+  const currentCauseRef = useRef<PlaybackCause | undefined>(undefined);
+  const publishAnchor = (
+    anchor: PublishedAnchor,
+    now: number,
+    playAt?: number,
+    cause?: PlaybackCause | "keep",
+  ) => {
+    if (cause !== "keep") currentCauseRef.current = cause;
+    const stickyCause = currentCauseRef.current;
     lastPublishedRef.current = anchor;
     lastPublishedAtRef.current = now;
     publishState({
@@ -153,6 +203,7 @@ export function useRoomHostSync(params: {
       speed: anchor.rate,
       sampledAt: now,
       ...(playAt != null && { playAt }),
+      ...(stickyCause && { cause: stickyCause }),
     });
   };
 
@@ -214,7 +265,7 @@ export function useRoomHostSync(params: {
     const change = anchorChange(lastPublishedRef.current, current, now);
     if (change === "state") {
       seekSettleRef.current = null;
-      publishAnchor(current, now);
+      publishAnchor(current, now, undefined, takeCause(["play", "pause"], now));
       return;
     }
     if (change === "position") {
@@ -224,16 +275,18 @@ export function useRoomHostSync(params: {
       else seekSettleRef.current = { since: settle.since, probe: current };
       if (now - seekSettleRef.current.since >= SEEK_SETTLE_MS) {
         seekSettleRef.current = null;
-        publishAnchor(current, now);
+        publishAnchor(current, now, undefined, takeCause(["seek"], now));
       }
       return;
     }
     seekSettleRef.current = null;
-    if (now - lastPublishedAtRef.current >= HOST_HEARTBEAT_MS) publishAnchor(current, now);
+    if (now - lastPublishedAtRef.current >= HOST_HEARTBEAT_MS)
+      publishAnchor(current, now, undefined, "keep");
   };
 
   useEffect(() => {
     lastPublishedRef.current = null;
+    currentCauseRef.current = undefined;
     seekSettleRef.current = null;
     const wasCountingDown = pendingPlayAtRef.current != null;
     cancelScheduledPlay();
@@ -260,9 +313,17 @@ export function useRoomHostSync(params: {
     scheduleSyncedPlay(Math.max(0, getPlaybackPosition()), START_COUNTDOWN_MS);
   }, []);
 
+  const noteLocalAction = useCallback(
+    (action: PlaybackAction) => noteAction(clientId, action),
+    [clientId],
+  );
+
   // Guest requests (play, pause, seek) arrive as commands; the host applies them.
   const seekSeqRef = useRef<Map<string, number>>(new Map());
   const pendingSeekRef = useRef<number | null>(null);
+  const seekFromRef = useRef<string | null>(null);
+  const onActivityRef = useRef(onActivity);
+  onActivityRef.current = onActivity;
   const seekApplyTimerRef = useRef<number | null>(null);
   const clearPendingSeek = () => {
     if (seekApplyTimerRef.current != null) {
@@ -283,6 +344,10 @@ export function useRoomHostSync(params: {
       if (!b || durationRef.current <= 0) return;
       b.seek(Math.max(0, Math.min(pos, durationRef.current - 1)));
     };
+    const applied = (from: string, action: PlaybackAction, positionSeconds?: number) => {
+      noteAction(from, action);
+      onActivityRef.current?.({ by: from, action, positionSeconds, at: Date.now() });
+    };
     const fireTimer = () => {
       seekApplyTimerRef.current = null;
       const pos = pendingSeekRef.current;
@@ -290,6 +355,7 @@ export function useRoomHostSync(params: {
       if (pos == null) return;
       if (!inRoomRef.current || !isHostRef.current) return;
       applySeek(pos);
+      applied(seekFromRef.current ?? "", "seek", pos);
     };
     const flushPending = () => {
       if (seekApplyTimerRef.current != null) {
@@ -298,20 +364,26 @@ export function useRoomHostSync(params: {
       }
       const pos = pendingSeekRef.current;
       pendingSeekRef.current = null;
-      if (pos != null) applySeek(pos);
+      if (pos == null) return;
+      applySeek(pos);
+      applied(seekFromRef.current ?? "", "seek", pos);
     };
     const off = onIncomingCommand((from, command) => {
       if (cast?.activeRef.current) return;
+      // The host locked playback; guests' players already refuse to send these.
+      if (hostOnlyRef?.current) return;
       const b = bridgeRef.current;
       if (!b) return;
       if (command.action === "play") {
         flushPending();
         cancelScheduledPlay();
         b.play({ reason: "room" }).catch(() => {});
+        applied(from, "play");
       } else if (command.action === "pause") {
         flushPending();
         cancelScheduledPlay();
         b.pause("room");
+        applied(from, "pause");
       } else if (command.action === "seek") {
         if (typeof command.seq === "number") {
           const last = seekSeqRef.current.get(from);
@@ -319,6 +391,7 @@ export function useRoomHostSync(params: {
           seekSeqRef.current.set(from, command.seq);
         }
         pendingSeekRef.current = command.positionSeconds;
+        seekFromRef.current = from;
         if (seekApplyTimerRef.current != null) window.clearTimeout(seekApplyTimerRef.current);
         seekApplyTimerRef.current = window.setTimeout(fireTimer, SEEK_APPLY_DEBOUNCE_MS);
       }
@@ -545,5 +618,5 @@ export function useRoomHostSync(params: {
     });
   }, [inRoom, isHost, hasStarted, snap.durationSec, publishState, mediaKey]);
 
-  return { startTogether, waitingFor, skipWaiting, countdownAt };
+  return { startTogether, waitingFor, skipWaiting, countdownAt, noteLocalAction };
 }

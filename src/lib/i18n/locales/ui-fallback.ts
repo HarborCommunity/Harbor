@@ -3683,6 +3683,15 @@ const uiFallback: Record<string, string> = {
   Rejoin: "Rejoin",
   "Keep watching": "Keep watching",
   "Update your relay to use this": "Update your relay to use this",
+  "Only I control playback": "Only I control playback",
+  "Guests can't play, pause or skip": "Guests can't play, pause or skip",
+  "{name} locked playback": "{name} locked playback",
+  "{name} unlocked playback": "{name} unlocked playback",
+  "Only {name} can control playback": "Only {name} can control playback",
+  "{name} paused": "{name} paused",
+  "{name} resumed": "{name} resumed",
+  "{name} skipped to {time}": "{name} skipped to {time}",
+  "{name} skipped": "{name} skipped",
 };
 
 export default uiFallback;

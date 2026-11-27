@@ -175,6 +175,7 @@ function harness(options: { cast?: boolean; started?: boolean; nudge?: boolean }
     calls,
     render,
     state,
+    activity: () => sets.filter((v) => v && typeof v === "object" && "by" in v),
     emit: (patch: any = {}) => {
       for (const cb of states) cb(state(patch));
     },
@@ -492,4 +493,43 @@ test("a guest keeps playing when the host goes away without asking to wait", () 
   h.params.roomSnapshot = { ...h.params.roomSnapshot, hostAway: true };
   h.render();
   assert.ok(!h.calls.some((c) => c[0] === "pause"));
+});
+
+test("a guest sees who paused, but not old news, its own action or a repeat", () => {
+  const h = harness();
+  h.render();
+  const cause = (id: number, by = "other") => ({ by, action: "pause", id });
+  // The first state carries a cause from before this guest arrived.
+  h.emit({ playing: false, updatedAt: h.now(), sampledAt: h.now(), cause: cause(1) });
+  assert.equal(h.activity().length, 0);
+  h.advance(100);
+  h.emit({ playing: true, updatedAt: h.now(), sampledAt: h.now(), cause: cause(2) });
+  h.advance(100);
+  h.emit({ playing: false, updatedAt: h.now(), sampledAt: h.now(), cause: cause(3) });
+  // A heartbeat repeats the same cause.
+  h.advance(100);
+  h.emit({ playing: false, updatedAt: h.now(), sampledAt: h.now(), cause: cause(3) });
+  h.advance(100);
+  h.emit({ playing: false, updatedAt: h.now(), sampledAt: h.now(), cause: cause(4, "guest") });
+  assert.deepEqual(
+    h.activity().map((a: any) => [a.by, a.action]),
+    [
+      ["other", "pause"],
+      ["other", "pause"],
+    ],
+  );
+});
+
+test("a seek notice says where the room jumped to", () => {
+  const h = harness();
+  h.render();
+  h.emit({ updatedAt: h.now(), sampledAt: h.now() });
+  h.advance(100);
+  h.emit({
+    positionSeconds: 2530,
+    updatedAt: h.now(),
+    sampledAt: h.now(),
+    cause: { by: "other", action: "seek", id: 9 },
+  });
+  assert.equal(h.activity().at(-1).positionSeconds, 2530);
 });

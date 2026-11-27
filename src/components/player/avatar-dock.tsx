@@ -40,8 +40,13 @@ export function AvatarDock({
 }) {
   if (hidden) return null;
   if (participants.length === 0) return null;
+  // Only the host publishes, so the cause names the person who actually paused.
   const lastPauserId =
-    syncState && !syncState.playing && syncState.updatedBy ? syncState.updatedBy : null;
+    syncState && !syncState.playing && !syncState.buffering
+      ? syncState.cause?.action === "pause"
+        ? syncState.cause.by
+        : syncState.updatedBy || null
+      : null;
   const alignRight = corner === "top-right" || corner === "bottom-right";
 
   const attention = participants.some((p) => {

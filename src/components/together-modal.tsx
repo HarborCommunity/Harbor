@@ -18,6 +18,7 @@ import {
   AutoStartToggle,
   DropPolicySelect,
   GuestPickToggle,
+  HostOnlyToggle,
 } from "./together-modal/guest-pick-toggle";
 import { InvitePanel } from "./together-modal/invite-panel";
 import { ReturnToVideo } from "./together-modal/return-to-video";
@@ -448,6 +449,7 @@ export function TogetherPopover({
 
             {snapshot.hostClientId === clientId && <GuestPickToggle />}
             {snapshot.hostClientId === clientId && <AutoStartToggle />}
+            {snapshot.hostClientId === clientId && <HostOnlyToggle />}
             {snapshot.hostClientId === clientId && (
               <DropPolicySelect
                 supported={(snapshot.relayVersion ?? 0) >= RELAY_SYNC_STATUS_VERSION}

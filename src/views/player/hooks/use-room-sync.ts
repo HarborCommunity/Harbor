@@ -28,7 +28,7 @@ import {
   SYNC_SEEK_JUMP_S,
   SYNC_SUPPRESS_MS,
 } from "../player-utils";
-import { useRoomHostSync, type DropPolicy } from "./use-room-host-sync";
+import { useRoomHostSync, type DropPolicy, type RoomActivity } from "./use-room-host-sync";
 
 type ForeignNotice = { title: string | null; from: string };
 
@@ -43,6 +43,8 @@ const PAUSE_SNAP_S = 0.1;
 const RESUME_SEEK_S = 1;
 /** After a corrective seek the playback clock needs time to settle before the next decision. */
 const SEEK_SETTLE_MS = 1500;
+/** A change older than this (a state replayed on join) is not announced. */
+const ACTIVITY_FRESH_MS = 5000;
 /** A guest reports buffering to the room only after waiting this long. */
 const BUFFERING_REPORT_MS = 1000;
 /** A guest that reported buffering is ready again once this much is buffered. */
@@ -92,6 +94,7 @@ export function useRoomSync(params: {
   bridgeRef: RefObject<PlayerBridge | null>;
   hostSourceRef: RefObject<SourceDescriptor | null>;
   guestPickRef: RefObject<boolean>;
+  hostOnlyRef?: RefObject<boolean>;
   publishState: (state: PartialSyncState) => void;
   onIncomingState: (cb: (state: SyncState) => void) => () => void;
   onIncomingCommand: (cb: (from: string, command: RoomCommand) => void) => () => void;
@@ -123,6 +126,7 @@ export function useRoomSync(params: {
     bridgeRef,
     hostSourceRef,
     guestPickRef,
+    hostOnlyRef,
     publishState,
     onIncomingState,
     onIncomingCommand,
@@ -136,7 +140,9 @@ export function useRoomSync(params: {
   } = params;
 
   const skipDroppedRef = useRef(false);
-  const { startTogether, waitingFor, skipWaiting, countdownAt } = useRoomHostSync({
+  const [activity, setActivity] = useState<RoomActivity | null>(null);
+  const lastCauseIdRef = useRef<number | null | undefined>(undefined);
+  const { startTogether, waitingFor, skipWaiting, countdownAt, noteLocalAction } = useRoomHostSync({
     inRoom,
     isHost,
     hasStarted,
@@ -147,8 +153,10 @@ export function useRoomSync(params: {
     bridgeRef,
     hostSourceRef,
     guestPickRef,
+    hostOnlyRef,
     publishState,
     onIncomingCommand,
+    onActivity: setActivity,
     dropPolicy,
     skipDroppedRef,
     cast,
@@ -284,6 +292,24 @@ export function useRoomSync(params: {
       if (state.updatedAt < lastAppliedStateAtRef.current) return;
       lastAppliedStateAtRef.current = state.updatedAt;
       const now = Date.now();
+      // The cause on the first state a viewer sees is old news from before it arrived.
+      const cause = state.cause;
+      const firstState = lastCauseIdRef.current === undefined;
+      if (firstState || (cause && cause.id !== lastCauseIdRef.current)) {
+        lastCauseIdRef.current = cause?.id ?? null;
+        if (
+          cause &&
+          !firstState &&
+          cause.by !== clientId &&
+          now - (state.sampledAt ?? state.updatedAt) < ACTIVITY_FRESH_MS
+        )
+          setActivity({
+            by: cause.by,
+            action: cause.action,
+            positionSeconds: cause.action === "seek" ? state.positionSeconds : undefined,
+            at: now,
+          });
+      }
 
       // Hosts that predate buffering reports repeat a frozen "playing"
       // position while they wait for data; treat that as stopped.
@@ -542,5 +568,7 @@ export function useRoomSync(params: {
     waitingFor,
     skipWaiting,
     keepWatching,
+    activity,
+    noteLocalAction,
   };
 }

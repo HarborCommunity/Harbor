@@ -128,6 +128,7 @@ function harness(options: { relayVersion?: number; dropPolicy?: string } = {}) {
     advance,
     start: () => result.startTogether(),
     skip: () => result.skipWaiting(),
+    note: (action: string) => result.noteLocalAction(action),
     position: (n: number) => {
       position = n;
     },
@@ -374,4 +375,78 @@ test("keep watching stops waiting for a dropped guest", () => {
   h.calls.length = 0;
   h.advance(5000);
   assert.ok(!h.calls.includes("pause"));
+});
+
+function withCommands(h: ReturnType<typeof harness>) {
+  let send: (from: string, command: any) => void = () => {};
+  const activity: any[] = [];
+  h.params.onIncomingCommand = (cb: any) => {
+    send = cb;
+    return () => {};
+  };
+  h.params.onActivity = (a: any) => activity.push(a);
+  return { send: (from: string, command: any) => send(from, command), activity };
+}
+
+test("a guest's pause goes out naming that guest, and heartbeats keep the name", () => {
+  const h = harness();
+  const room = withCommands(h);
+  h.render();
+  room.send("guest", { action: "pause" });
+  assert.ok(h.calls.includes("pause"));
+  assert.deepEqual(
+    room.activity.map((a) => [a.by, a.action]),
+    [["guest", "pause"]],
+  );
+  h.params.snap = { ...h.params.snap, status: "paused" };
+  h.render();
+  const paused = h.published.at(-1);
+  assert.equal(paused.playing, false);
+  assert.equal(paused.cause.by, "guest");
+  assert.equal(paused.cause.action, "pause");
+  h.advance(1000);
+  assert.equal(h.published.at(-1).cause.id, paused.cause.id);
+});
+
+test("an automatic change carries no cause and clears the last one", () => {
+  const h = harness();
+  const room = withCommands(h);
+  h.render();
+  room.send("guest", { action: "pause" });
+  h.params.snap = { ...h.params.snap, status: "paused" };
+  h.render();
+  assert.ok(h.published.at(-1).cause);
+  // Resumed by something other than a person (a scheduled start, a room wait).
+  h.advance(4000);
+  h.params.snap = { ...h.params.snap, status: "playing" };
+  h.render();
+  assert.equal(h.published.at(-1).cause, undefined);
+});
+
+test("the host's own seek is named once it settles", () => {
+  const h = harness();
+  h.render();
+  h.note("seek");
+  h.position(300);
+  h.advance(250);
+  assert.equal(h.published.at(-1).cause, undefined);
+  h.advance(250);
+  h.advance(250);
+  const settled = h.published.at(-1);
+  assert.ok(Math.abs(settled.positionSeconds - 300) < 0.5);
+  assert.equal(settled.cause.by, "host");
+  assert.equal(settled.cause.action, "seek");
+});
+
+test("a locked room ignores guests' commands", () => {
+  const h = harness();
+  const room = withCommands(h);
+  h.params.hostOnlyRef = { current: true };
+  h.render();
+  room.send("guest", { action: "pause" });
+  room.send("guest", { action: "seek", positionSeconds: 900 });
+  h.advance(500);
+  assert.deepEqual(h.calls, []);
+  assert.deepEqual(room.activity, []);
+  assert.equal(h.published.at(-1).hostOnly, true);
 });

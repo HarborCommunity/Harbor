@@ -40,7 +40,7 @@ export function RoomSyncPill(props: { notice: RoomSyncPillNotice; onKeepWatching
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none absolute left-1/2 top-20 z-30 flex max-w-[calc(100%-32px)] -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/72 px-4 py-2 text-[13px] font-medium text-white backdrop-blur-xl"
+      className="pointer-events-none flex max-w-full items-center gap-2 rounded-full border border-white/15 bg-black/72 px-4 py-2 text-[13px] font-medium text-white backdrop-blur-xl"
     >
       <span aria-hidden className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-white/80" />
       <span className="truncate">{text}</span>

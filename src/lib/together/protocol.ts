@@ -52,10 +52,19 @@ export type SyncState = {
   playAt?: number;
   /** The host wants the room to pause and wait for anyone whose connection drops. */
   waitOnDrop?: boolean;
+  /** Only the host controls playback; the host ignores guests' play, pause and seek. */
+  hostOnly?: boolean;
+  /** Who made the change this state announces, so everyone can see who paused. */
+  cause?: PlaybackCause;
   updatedAt: number;
   updatedBy: string;
   hostClientId: string | null;
 };
+
+export type PlaybackAction = "play" | "pause" | "seek";
+
+/** A playback change someone made on purpose. `id` grows with each change from one host. */
+export type PlaybackCause = { by: string; action: PlaybackAction; id: number };
 
 /** Relay version that understands participant status and host grace periods. */
 export const RELAY_SYNC_STATUS_VERSION = 12;

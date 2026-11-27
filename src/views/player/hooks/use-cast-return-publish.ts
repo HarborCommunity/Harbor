@@ -13,10 +13,20 @@ export function useCastReturnPublish(params: {
   snapRef: RefObject<PlayerSnapshot>;
   hostSourceRef: RefObject<SourceDescriptor | null>;
   guestPickRef: RefObject<boolean>;
+  hostOnlyRef?: RefObject<boolean>;
   publishState: (state: PartialSyncState) => void;
 }) {
-  const { casting, inRoom, isHost, src, snapRef, hostSourceRef, guestPickRef, publishState } =
-    params;
+  const {
+    casting,
+    inRoom,
+    isHost,
+    src,
+    snapRef,
+    hostSourceRef,
+    guestPickRef,
+    hostOnlyRef,
+    publishState,
+  } = params;
   const wasCastingRef = useRef(false);
   useEffect(() => {
     if (wasCastingRef.current && !casting && inRoom && isHost) {
@@ -32,6 +42,7 @@ export function useCastReturnPublish(params: {
         playing: s.status === "playing",
         source: hostSourceRef.current ?? undefined,
         guestPick: guestPickRef.current || undefined,
+        hostOnly: hostOnlyRef?.current || undefined,
       });
     }
     wasCastingRef.current = casting;
