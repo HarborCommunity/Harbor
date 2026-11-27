@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useT } from "@/lib/i18n";
+import { useT, useUiLanguage } from "@/lib/i18n";
 import { formatNames } from "./player-utils";
 
 export type RoomSyncPillNotice =
@@ -21,6 +21,7 @@ export function useSecondsUntil(at: number | null): number {
 /** Tells a viewer why playback is holding: a countdown, or who the room waits for. */
 export function RoomSyncPill(props: { notice: RoomSyncPillNotice; onKeepWatching?: () => void }) {
   const t = useT();
+  const language = useUiLanguage();
   const { notice } = props;
   const seconds = useSecondsUntil(notice.kind === "countdown" ? notice.at : null);
   const text =
@@ -28,12 +29,12 @@ export function RoomSyncPill(props: { notice: RoomSyncPillNotice; onKeepWatching
       ? t("Starting together in {n}…", { n: seconds })
       : notice.kind === "host-buffering"
         ? t("Waiting for {name} to load…", { name: notice.host })
-        : t("Waiting for {names} to load…", { names: formatNames(notice.names) });
+        : t("Waiting for {names} to load…", { names: formatNames(notice.names, language) });
   return (
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-auto absolute left-1/2 top-20 z-30 flex max-w-[calc(100%-32px)] -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/72 px-4 py-2 text-[13px] font-medium text-white backdrop-blur-xl"
+      className="pointer-events-none absolute left-1/2 top-20 z-30 flex max-w-[calc(100%-32px)] -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/72 px-4 py-2 text-[13px] font-medium text-white backdrop-blur-xl"
     >
       <span aria-hidden className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-white/80" />
       <span className="truncate">{text}</span>
@@ -41,7 +42,7 @@ export function RoomSyncPill(props: { notice: RoomSyncPillNotice; onKeepWatching
         <button
           type="button"
           onClick={props.onKeepWatching}
-          className="ms-1 shrink-0 rounded-full bg-white/15 px-3 py-1 text-[12px] font-semibold hover:bg-white/25"
+          className="pointer-events-auto ms-1 shrink-0 rounded-full bg-white/15 px-3 py-1 text-[12px] font-semibold hover:bg-white/25"
         >
           {t("Keep watching")}
         </button>

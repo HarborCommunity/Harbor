@@ -312,12 +312,15 @@ export function useRoomHostSync(params: {
     paused: boolean;
     pausedAt: number;
     since: Map<string, number>;
+    /** Time already spent waiting for each guest on this title, across stalls. */
+    spent: Map<string, number>;
     skipped: Set<string>;
   };
   const freshWait = (): WaitState => ({
     paused: false,
     pausedAt: 0,
     since: new Map(),
+    spent: new Map(),
     skipped: new Set(),
   });
   const waitRef = useRef<WaitState>(freshWait());
@@ -353,13 +356,24 @@ export function useRoomHostSync(params: {
       const p = byId.get(id);
       if (phase === "buffering" && id !== clientId && p) limits.set(id, GUEST_WAIT_MAX_MS);
     }
-    // Guests that left, rejoined or recovered start over: a later stall waits again.
-    for (const id of wait.since.keys()) if (!limits.has(id)) wait.since.delete(id);
-    for (const id of wait.skipped) if (!limits.has(id)) wait.skipped.delete(id);
+    // One wait budget per guest per title: a stall that ends adds to it, so a
+    // guest who keeps stalling stops pausing everyone. Once skipped (budget
+    // spent, or Keep watching) a guest stays skipped until they leave.
+    for (const [id, at] of wait.since)
+      if (!limits.has(id)) {
+        wait.spent.set(id, (wait.spent.get(id) ?? 0) + (now - at));
+        wait.since.delete(id);
+      }
+    for (const id of [...wait.skipped, ...wait.spent.keys()])
+      if (!byId.has(id)) {
+        wait.skipped.delete(id);
+        wait.spent.delete(id);
+      }
     const holding: string[] = [];
     for (const [id, limit] of limits) {
       if (!wait.since.has(id)) wait.since.set(id, now);
-      if (now - (wait.since.get(id) ?? now) > limit) wait.skipped.add(id);
+      const waited = (wait.spent.get(id) ?? 0) + now - (wait.since.get(id) ?? now);
+      if (waited > limit) wait.skipped.add(id);
       if (!wait.skipped.has(id)) holding.push(id);
     }
     if (
@@ -393,6 +407,14 @@ export function useRoomHostSync(params: {
     for (const id of wait.since.keys()) wait.skipped.add(id);
     resumeAfterWait();
   }, []);
+
+  // A new title gives every guest a fresh budget.
+  useEffect(() => {
+    const wait = waitRef.current;
+    wait.since.clear();
+    wait.spent.clear();
+    wait.skipped.clear();
+  }, [mediaKey]);
 
   const statusSupported = (roomSnapshot.relayVersion ?? 0) >= RELAY_SYNC_STATUS_VERSION;
   useEffect(() => {

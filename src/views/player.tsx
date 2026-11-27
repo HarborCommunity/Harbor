@@ -891,6 +891,8 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     }
     if (syncNotice?.kind === "host-buffering")
       return { notice: { kind: "host-buffering", host: nameOf(roomSnapshot.hostClientId) } };
+    // Only while the room actually holds; a skipped guest still loading plays on.
+    if (roomSnapshot.syncState?.playing !== false) return null;
     const loading = people
       .filter((p) => p.id !== clientId && roomSnapshot.participantStatus[p.id] === "buffering")
       .map((p) => p.name);
@@ -906,6 +908,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     roomSnapshot.participants,
     roomSnapshot.participantStatus,
     roomSnapshot.hostClientId,
+    roomSnapshot.syncState?.playing,
     t,
   ]);
 

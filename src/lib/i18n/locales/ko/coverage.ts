@@ -1,4 +1,5 @@
 const coverage: Record<string, string> = {
+  "Waiting for {names} to load…": "{names} 님의 로딩을 기다리는 중…",
   "Start when everyone is ready": "모두 준비되면 시작",
   "Counts down, then plays for the room": "카운트다운 후 방 전체에 재생합니다",
   "Starting in {n}… Cancel": "{n}초 후 시작… 취소",

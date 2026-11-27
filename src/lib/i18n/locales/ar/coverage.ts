@@ -1,4 +1,5 @@
 const coverage: Record<string, string> = {
+  "Waiting for {names} to load…": "في انتظار تحميل {names}…",
   "Start when everyone is ready": "البدء عندما يكون الجميع جاهزين",
   "Counts down, then plays for the room": "يعدّ تنازليًا ثم يشغّل للغرفة",
   "Starting in {n}… Cancel": "البدء خلال {n}… إلغاء",

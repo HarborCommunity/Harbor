@@ -20,13 +20,14 @@ class FakeSocket {
   }
 }
 
-async function room() {
-  const store = new Map<string, unknown>();
+async function room(shared?: { store: Map<string, unknown>; sockets: FakeSocket[] }) {
+  const store = shared?.store ?? new Map<string, unknown>();
+  const sockets = shared?.sockets ?? [];
   const writes: string[] = [];
   let alarm: number | null = null;
   let ready: Promise<void> = Promise.resolve();
   const state = {
-    getWebSockets: () => [],
+    getWebSockets: () => sockets,
     acceptWebSocket: () => {},
     blockConcurrencyWhile: (fn: () => Promise<void>) => {
       ready = fn();
@@ -50,10 +51,11 @@ async function room() {
   await ready;
   const join = (clientId: string) => {
     const socket = new FakeSocket();
+    sockets.push(socket);
     r.onMessage(socket, { t: "hello", clientId, name: clientId });
     return socket;
   };
-  return { r, join, writes, alarm: () => alarm };
+  return { r, join, writes, alarm: () => alarm, store, sockets };
 }
 
 const stateMsg = (patch: object = {}) => ({
@@ -83,6 +85,36 @@ test("guest buffering status reaches everyone and is part of the joined snapshot
   assert.equal(host.sent.filter((m) => m.t === "participant-status").length, 1);
   const late = join("late");
   assert.deepEqual(late.last("joined").statuses, { guest: "buffering" });
+});
+
+test("a room woken from eviction keeps when its state was received and each guest's status", async () => {
+  const first = await room();
+  const host = first.join("host");
+  const guest = first.join("guest");
+  first.r.onMessage(host, stateMsg({ playing: false, positionSeconds: 42 }));
+  first.r.onMessage(guest, { t: "status", phase: "buffering" });
+  const receivedAt = first.r.syncStateAt;
+  assert.ok(receivedAt != null);
+  // The Durable Object is evicted; a new instance wakes on the same storage and sockets.
+  const woken = await room({ store: first.store, sockets: first.sockets });
+  const late = woken.join("late");
+  const joined = late.last("joined");
+  assert.equal(joined.state.positionSeconds, 42);
+  assert.equal(joined.observedAt, receivedAt, "the stored state is not handed out as fresh");
+  assert.deepEqual(joined.statuses, { guest: "buffering" });
+});
+
+test("a seek while paused is saved at once, and an unchanged status is not re-sent", async () => {
+  const { r, join, writes } = await room();
+  const host = join("host");
+  const guest = join("guest");
+  r.onMessage(host, stateMsg({ playing: false, positionSeconds: 10 }));
+  writes.length = 0;
+  r.onMessage(host, stateMsg({ playing: false, positionSeconds: 300 }));
+  assert.ok(writes.includes("syncState"), "a paused seek is not left for the periodic save");
+  r.onMessage(guest, { t: "status", phase: "buffering" });
+  r.onMessage(guest, { t: "status", phase: "buffering" });
+  assert.equal(host.sent.filter((m) => m.t === "participant-status").length, 1);
 });
 
 test("a host that drops keeps its role through the grace period", async () => {

@@ -4,7 +4,7 @@ import waitingAnim from "@/assets/lottie/wt-waiting-white.json";
 import { formatNames } from "./player-utils";
 import { useSecondsUntil } from "./room-sync-pill";
 import type { RoomSnapshot } from "@/lib/together/client";
-import { useT } from "@/lib/i18n";
+import { useT, useUiLanguage } from "@/lib/i18n";
 
 function readyPillClass(ready: boolean, stale: boolean): string {
   if (ready) return "bg-emerald-500/15 text-emerald-300";
@@ -47,6 +47,7 @@ export function WaitingForRoom(props: {
     onCancelAutoStart,
   } = props;
   const t = useT();
+  const language = useUiLanguage();
   const autoStartIn = useSecondsUntil(autoStartAt);
   const startRef = useRef<HTMLButtonElement>(null);
   const stillLoading = notReady.length;
@@ -61,7 +62,12 @@ export function WaitingForRoom(props: {
           <p className="text-[13px] text-white/60">
             {isHost
               ? stillLoading > 0
-                ? t("Loading on {names}…", { names: formatNames(notReady.map((p) => p.name)) })
+                ? t("Loading on {names}…", {
+                    names: formatNames(
+                      notReady.map((p) => p.name),
+                      language,
+                    ),
+                  })
                 : t("Everyone is loaded in. Press play to start watching.")
               : t("The host starts playback for the whole room.")}
           </p>

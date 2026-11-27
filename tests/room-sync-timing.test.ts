@@ -81,6 +81,7 @@ function harness(options: { cast?: boolean; started?: boolean; nudge?: boolean }
       : undefined,
   };
   const sets: any[] = [];
+  const intervals: (() => void)[] = [];
   const mocks: Record<string, any> = {
     react: {
       useState: (initial: any) => [initial, (v: any) => sets.push(v)],
@@ -140,8 +141,10 @@ function harness(options: { cast?: boolean; started?: boolean; nudge?: boolean }
     exports,
     { now: () => now },
     {
-      setInterval: () => 1,
-      clearInterval: () => {},
+      setInterval: (fn: () => void) => (intervals.push(fn), intervals.length),
+      clearInterval: (id: number) => {
+        intervals[id - 1] = () => {};
+      },
       setTimeout: (fn: () => void, ms: number) => timers.push({ fn, at: now + ms }),
       clearTimeout: () => {},
     },
@@ -166,6 +169,9 @@ function harness(options: { cast?: boolean; started?: boolean; nudge?: boolean }
   return {
     params,
     notices: () => sets.filter((v) => v && typeof v === "object" && "kind" in v),
+    tick: () => {
+      for (const fn of intervals) fn();
+    },
     calls,
     render,
     state,
@@ -362,6 +368,31 @@ test("catch-up does not repeatedly seek while the player is still buffering", ()
   h.emit({ positionSeconds: 100 });
   assert.equal(seek(h), undefined);
   assert.ok(h.calls.some((c) => c[0] === "play"));
+});
+
+test("a guest reports buffering after 1 s of stalling and ready once 2 s are buffered", () => {
+  const h = harness();
+  const sent: string[] = [];
+  h.params.roomSnapshot = { ...h.params.roomSnapshot, relayVersion: 12 };
+  h.params.sendStatus = (phase: string) => sent.push(phase);
+  h.render();
+  h.params.snap.buffering = true;
+  h.render();
+  h.tick();
+  h.advance(500);
+  h.tick();
+  assert.deepEqual(sent, [], "a short hiccup is not reported");
+  h.advance(600);
+  h.tick();
+  assert.deepEqual(sent, ["buffering"]);
+  h.params.snap.buffering = false;
+  h.render();
+  h.buffered(1);
+  h.tick();
+  assert.deepEqual(sent, ["buffering"], "1 s buffered is not enough to hold up again");
+  h.buffered(2.5);
+  h.tick();
+  assert.deepEqual(sent, ["buffering", "ready"]);
 });
 
 test("a buffering host stops guests once instead of replaying the same second", () => {

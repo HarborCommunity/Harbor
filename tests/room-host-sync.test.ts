@@ -272,16 +272,40 @@ test("a crashed guest stops holding the room after the wait limit", () => {
   assert.ok(h.calls.includes("play"));
 });
 
-test("a guest skipped earlier is waited for again after it recovers", () => {
+test("a guest who keeps stalling stops pausing the room once its budget for the title is spent", () => {
   const h = harness({ relayVersion: 12 });
   h.render();
+  const status = (phase: string) => {
+    h.params.roomSnapshot = { ...h.params.roomSnapshot, participantStatus: { guest: phase } };
+    h.render();
+  };
   bufferingGuest(h);
-  h.advance(16_600);
+  h.advance(10_000);
+  // Recovers after 10 s: the room resumes together.
+  status("ready");
+  h.advance(1000);
   h.params.snap = { ...h.params.snap, status: "playing" };
-  h.params.roomSnapshot = { ...h.params.roomSnapshot, participantStatus: { guest: "ready" } };
+  h.render();
+  // Stalls again: 5 s of the 15 s budget are left.
+  h.calls.length = 0;
+  status("buffering");
+  assert.ok(h.calls.includes("pause"), "a later stall still waits while budget remains");
+  h.params.snap = { ...h.params.snap, status: "paused" };
   h.render();
   h.calls.length = 0;
-  h.params.roomSnapshot = { ...h.params.roomSnapshot, participantStatus: { guest: "buffering" } };
-  h.render();
+  h.advance(6000);
+  h.advance(600);
+  assert.ok(h.calls.includes("play"), "the budget ran out and the room carries on");
+  h.params.snap = { ...h.params.snap, status: "playing" };
+  status("ready");
+  h.calls.length = 0;
+  status("buffering");
+  h.advance(2000);
+  assert.ok(!h.calls.includes("pause"), "a skipped guest no longer stops everyone");
+  // A new title gives the budget back.
+  h.params.src = { ...h.params.src, meta: { id: "tt200", name: "Next" } };
+  status("ready");
+  status("buffering");
+  h.advance(1000);
   assert.ok(h.calls.includes("pause"));
 });
