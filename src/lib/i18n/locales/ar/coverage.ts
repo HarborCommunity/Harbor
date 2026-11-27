@@ -1,4 +1,16 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…": "انقطع اتصال {name}. في انتظار عودته…",
+  "When someone drops": "عند انقطاع أحدهم",
+  "Keep playing": "متابعة التشغيل",
+  "Always wait": "الانتظار دائمًا",
+  "Everyone else carries on": "يتابع الآخرون المشاهدة",
+  "Pauses and waits in rooms of up to 3 people":
+    "يتوقف مؤقتًا وينتظر في الغرف التي تضم 3 أشخاص كحد أقصى",
+  "Pauses and waits up to 2 minutes for them to rejoin": "يتوقف مؤقتًا وينتظر حتى دقيقتين لعودتهم",
+  "Waiting for {names} to reconnect…": "في انتظار إعادة اتصال {names}…",
+  "Rejoin watch party": "العودة إلى جلسة المشاهدة",
+  Rejoin: "العودة",
+  "Update your relay to use this": "حدّث المرحّل لاستخدام هذا",
   "Waiting for {names} to load…": "في انتظار تحميل {names}…",
   "Start when everyone is ready": "البدء عندما يكون الجميع جاهزين",
   "Counts down, then plays for the room": "يعدّ تنازليًا ثم يشغّل للغرفة",

@@ -1,4 +1,17 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} đã mất kết nối. Đang chờ quay lại…",
+  "When someone drops": "Khi có người rớt mạng",
+  "Keep playing": "Tiếp tục phát",
+  "Always wait": "Luôn chờ",
+  "Everyone else carries on": "Mọi người khác vẫn xem tiếp",
+  "Pauses and waits in rooms of up to 3 people": "Tạm dừng và chờ trong phòng tối đa 3 người",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Tạm dừng và chờ tối đa 2 phút để họ quay lại",
+  "Waiting for {names} to reconnect…": "Đang chờ {names} kết nối lại…",
+  "Rejoin watch party": "Tham gia lại buổi xem chung",
+  Rejoin: "Tham gia lại",
+  "Update your relay to use this": "Hãy cập nhật relay để dùng tính năng này",
   "Waiting for {names} to load…": "Đang chờ {names} tải xong…",
   "Start when everyone is ready": "Bắt đầu khi mọi người sẵn sàng",
   "Counts down, then plays for the room": "Đếm ngược rồi phát cho cả phòng",

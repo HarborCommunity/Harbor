@@ -274,6 +274,8 @@ function isPortable(key: string): boolean {
   if (key.startsWith("harbor.update.")) return false;
   if (key === "harbor.auth" || key.startsWith("harbor.auth.")) return false;
   if (key === "harbor.together.clientId") return false;
+  // A link back to a watch party on this device, not something to restore elsewhere.
+  if (key === "harbor.together.lastRoom") return false;
   return true;
 }
 

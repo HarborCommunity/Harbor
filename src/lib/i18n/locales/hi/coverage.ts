@@ -1,4 +1,16 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} का कनेक्शन टूट गया। उनके लौटने का इंतज़ार…",
+  "When someone drops": "जब किसी का कनेक्शन टूटे",
+  "Keep playing": "चलाते रहें",
+  "Always wait": "हमेशा इंतज़ार करें",
+  "Everyone else carries on": "बाकी सब देखते रहते हैं",
+  "Pauses and waits in rooms of up to 3 people": "3 लोगों तक के रूम में रोककर इंतज़ार करता है",
+  "Pauses and waits up to 2 minutes for them to rejoin": "रोककर उनके लौटने का 2 मिनट तक इंतज़ार करता है",
+  "Waiting for {names} to reconnect…": "{names} के दोबारा जुड़ने का इंतज़ार…",
+  "Rejoin watch party": "वॉच पार्टी में फिर से जुड़ें",
+  Rejoin: "फिर से जुड़ें",
+  "Update your relay to use this": "इसका इस्तेमाल करने के लिए अपना रिले अपडेट करें",
   "Waiting for {names} to load…": "{names} के लोड होने का इंतज़ार…",
   "Start when everyone is ready": "सबके तैयार होने पर शुरू करें",
   "Counts down, then plays for the room": "उलटी गिनती के बाद रूम के लिए चलाता है",

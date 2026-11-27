@@ -1,4 +1,17 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} 님의 연결이 끊겼습니다. 돌아오기를 기다리는 중…",
+  "When someone drops": "누군가 연결이 끊기면",
+  "Keep playing": "계속 재생",
+  "Always wait": "항상 기다리기",
+  "Everyone else carries on": "다른 사람은 계속 시청합니다",
+  "Pauses and waits in rooms of up to 3 people": "3명 이하의 방에서는 일시정지하고 기다립니다",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "일시정지하고 최대 2분 동안 재접속을 기다립니다",
+  "Waiting for {names} to reconnect…": "{names} 님의 재연결을 기다리는 중…",
+  "Rejoin watch party": "함께 보기에 다시 참여",
+  Rejoin: "다시 참여",
+  "Update your relay to use this": "이 기능을 사용하려면 릴레이를 업데이트하세요",
   "Waiting for {names} to load…": "{names} 님의 로딩을 기다리는 중…",
   "Start when everyone is ready": "모두 준비되면 시작",
   "Counts down, then plays for the room": "카운트다운 후 방 전체에 재생합니다",

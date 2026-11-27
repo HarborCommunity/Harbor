@@ -1,4 +1,17 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name}: соединение потеряно. Ждём возвращения…",
+  "When someone drops": "Если кто-то отключится",
+  "Keep playing": "Продолжать воспроизведение",
+  "Always wait": "Всегда ждать",
+  "Everyone else carries on": "Остальные продолжают смотреть",
+  "Pauses and waits in rooms of up to 3 people": "Ставит на паузу и ждёт в комнатах до 3 человек",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Ставит на паузу и ждёт возвращения до 2 минут",
+  "Waiting for {names} to reconnect…": "Ждём переподключения: {names}…",
+  "Rejoin watch party": "Вернуться к совместному просмотру",
+  Rejoin: "Вернуться",
+  "Update your relay to use this": "Обновите ретранслятор, чтобы использовать это",
   "Waiting for {names} to load…": "Ждём загрузки у {names}…",
   "Start when everyone is ready": "Начать, когда все будут готовы",
   "Counts down, then plays for the room": "Отсчитывает время и запускает для всей комнаты",

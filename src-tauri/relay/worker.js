@@ -291,8 +291,11 @@ export class Room {
     this.onMessage(ws, msg);
   }
 
-  webSocketClose(ws) {
-    this.onClose(ws);
+  webSocketClose(ws, code) {
+    // 1001 is the browser or app closing the page: a quit, not a dropped
+    // connection, so nobody should be held up waiting for them.
+    if (code === 1001) this.handleLeave(ws);
+    else this.onClose(ws);
   }
 
   webSocketError(ws) {
@@ -725,9 +728,12 @@ export class Room {
     // The throttle may be holding back the newest state; keep it if the room goes idle.
     if (this.syncState && this.lastSyncSaveAt < (this.syncStateAt ?? 0)) this.saveSync();
     if (this.peers.size === 0 && this.away.size > 0) {
+      // Nobody is left to wait; an away host must not keep the role in an empty room.
+      const hostWasAway = this.away.has(this.hostClientId);
       this.away.clear();
       this.saveAway();
       this.scheduleAlarm();
+      if (hostWasAway) this.reassignHost();
     }
     // The host chose to wait for people who drop: keep this one in the room
     // (and in the host role) for a while instead of announcing that they left.

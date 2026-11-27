@@ -226,6 +226,30 @@ test("a crashed host that waits for drops keeps the role while away", async () =
   assert.deepEqual(guest.last("host"), { t: "host", hostClientId: "host" });
 });
 
+test("when everyone else leaves too, an away host does not keep the role in an empty room", async () => {
+  const { r, join } = await room();
+  const host = join("host");
+  const guest = join("guest");
+  dropState(r, host);
+  r.onClose(host);
+  r.onClose(guest);
+  assert.equal(r.hostClientId, null);
+  const back = join("guest");
+  assert.equal(back.last("joined").hostClientId, "guest", "whoever comes back first hosts");
+});
+
+test("closing the app or page counts as leaving, not as a dropped connection", async () => {
+  const { r, join } = await room();
+  const host = join("host");
+  const guest = join("guest");
+  dropState(r, host);
+  r.webSocketClose(guest, 1001);
+  assert.equal(host.last("participant-left").clientId, "guest");
+  assert.equal(host.last("participant-away"), undefined, "nobody waits for someone who quit");
+  r.webSocketClose(host, 1006);
+  assert.equal(r.away.has("host"), false, "the room is empty, so nobody is held");
+});
+
 test("an away host that never returns hands the role over", async () => {
   const { r, join } = await room();
   const host = join("host");

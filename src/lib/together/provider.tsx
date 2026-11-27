@@ -31,7 +31,8 @@ import type {
   RemoteCursor,
 } from "./provider-types";
 import { createCommandSender } from "./seek-coalesce";
-import { clearSavedRoom, loadRecentRoom, saveRoom, type SavedRoom } from "./rejoin";
+import { clearSavedRoom, type SavedRoom } from "./rejoin";
+import { useRejoinOffer } from "./use-rejoin-offer";
 import {
   clearInviteParams,
   emitTogetherInvite,
@@ -477,36 +478,26 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Remember the room on disk while in it; leaving on purpose forgets it.
+  // Closing the app or page is leaving, not a dropped connection: say so, so a
+  // room that waits for people who drop doesn't hold for someone who quit. The
+  // saved room stays, so a restart can still offer to rejoin.
   useEffect(() => {
-    if (snapshot.state !== "joined" || !snapshot.room || snapshot.listenSessionId) return;
-    saveRoom(relayUrl, snapshot.room, snapshot.syncState);
-  }, [relayUrl, snapshot.state, snapshot.room, snapshot.listenSessionId, snapshot.syncState]);
-
-  const [rejoinOffer, setRejoinOffer] = useState<SavedRoom | null>(null);
-  const rejoinCheckedRef = useRef(false);
-  useEffect(() => {
-    if (rejoinCheckedRef.current || !relayUrl) return;
-    rejoinCheckedRef.current = true;
-    if (pendingInvite) return;
-    setRejoinOffer(loadRecentRoom(relayUrl));
-  }, [relayUrl, pendingInvite]);
-  useEffect(() => {
-    if (pendingInvite || snapshot.state === "joined") setRejoinOffer(null);
-  }, [pendingInvite, snapshot.state]);
-  const rejoinOfferRef = useRef(rejoinOffer);
-  rejoinOfferRef.current = rejoinOffer;
-  const acceptRejoin = useCallback(() => {
-    const offer = rejoinOfferRef.current;
-    setRejoinOffer(null);
-    if (!offer) return;
+    const onPageHide = (e: PageTransitionEvent) => {
+      if (!e.persisted) clientRef.current?.leave();
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
+  const joinFromRejoin = useCallback((room: string) => {
     setChat([]);
-    clientRef.current?.join(offer.room);
+    clientRef.current?.join(room);
   }, []);
-  const dismissRejoin = useCallback(() => {
-    clearSavedRoom();
-    setRejoinOffer(null);
-  }, []);
+  const { rejoinOffer, acceptRejoin, dismissRejoin } = useRejoinOffer({
+    relayUrl,
+    snapshot,
+    pendingInvite,
+    join: joinFromRejoin,
+  });
 
   const sendStatus = useCallback((phase: ParticipantSyncPhase) => {
     clientRef.current?.sendStatus(phase);

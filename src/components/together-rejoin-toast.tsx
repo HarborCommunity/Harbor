@@ -37,12 +37,19 @@ export function TogetherRejoinToast() {
 
   // Hosts get no invite for their own room, so reopen the title for them.
   useEffect(() => {
-    if (!joining || snapshot.state !== "joined") return;
+    if (!joining) return;
+    // A guest's invite takes over from here, and a failed join reopens nothing later.
+    if (incomingInvite || snapshot.state === "error") {
+      setJoining(false);
+      reopenRef.current = null;
+      return;
+    }
+    if (snapshot.state !== "joined") return;
     const timer = window.setTimeout(() => {
       setJoining(false);
       const media = reopenRef.current;
       reopenRef.current = null;
-      if (!media || incomingInvite) return;
+      if (!media) return;
       openPicker(
         { id: media.id, type: media.type, name: media.name, poster: media.poster },
         media.episode,
