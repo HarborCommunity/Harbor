@@ -51,7 +51,7 @@ function harness(avatar: string | null = null) {
   new Function("require", "exports", "window", "WebSocket", "Date", "Math", compiled)(
     (name: string) =>
       name === "./protocol"
-        ? { WT_PROTO: 1 }
+        ? { WT_PROTO: 1, REACTION_EMOJI: ["😂", "🔥"] }
         : { diagnoseRelayFailure: async () => "fixture unavailable" },
     exports,
     {
@@ -410,4 +410,51 @@ test("a participant whose connection dropped is shown as away", () => {
   const back = h.client.getSnapshot();
   assert.equal(back.participants.find((p: any) => p.id === "host").away, undefined);
   assert.equal(back.hostAway, false);
+});
+
+test("each guest's reported distance from the host is kept, replaced and cleared", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  const socket = h.sockets.at(-1)!;
+  socket.open();
+  socket.message({
+    t: "joined",
+    participants: [{ id: "self", name: "Fixture" }],
+    hostClientId: "self",
+    state: null,
+    started: true,
+    srvAt: 100000,
+    offsets: { guest: -5 },
+  });
+  assert.equal(h.client.getSnapshot().participantOffset.guest, -5);
+  socket.message({ t: "participant-status", clientId: "guest", phase: "ready", offset: 2 });
+  assert.equal(h.client.getSnapshot().participantOffset.guest, 2);
+  socket.message({ t: "participant-status", clientId: "guest", phase: "ready" });
+  assert.equal(h.client.getSnapshot().participantOffset.guest, undefined);
+  socket.message({ t: "participant-status", clientId: "guest", phase: "ready", offset: 4 });
+  socket.message({ t: "participant-left", clientId: "guest" });
+  assert.equal(h.client.getSnapshot().participantOffset.guest, undefined);
+});
+
+test("reactions from others become events; echoes and unknown ones do not", () => {
+  const h = harness();
+  const events: any[] = [];
+  h.client.on((e: any) => e.kind === "reaction" && events.push(e));
+  h.client.join("ABC123");
+  h.joined();
+  const socket = h.sockets[0];
+  socket.message({ t: "reaction", from: "guest", name: "Guest", emoji: "🔥", at: 1 });
+  socket.message({ t: "reaction", from: "self", name: "Fixture", emoji: "🔥", at: 2 });
+  socket.message({ t: "reaction", from: "guest", name: "Guest", emoji: "🍕", at: 3 });
+  assert.deepEqual(
+    events.map((e) => [e.from, e.emoji]),
+    [["guest", "🔥"]],
+  );
+  h.client.sendReaction("😂");
+  assert.deepEqual(socket.sent.at(-1), {
+    t: "react",
+    room: "ABC123",
+    clientId: "self",
+    emoji: "😂",
+  });
 });

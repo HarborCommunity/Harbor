@@ -62,6 +62,8 @@ import { useRoomSync } from "./player/hooks/use-room-sync";
 import { setHostMove } from "@/lib/together/host-move";
 import { playbackKey } from "@/lib/together/client";
 import { useRoomActivityNotice } from "./player/hooks/use-room-activity-notice";
+import { useFloatingReactions } from "./player/hooks/use-floating-reactions";
+import { RELAY_SOCIAL_VERSION, type ReactionEmoji } from "@/lib/together/protocol";
 import { useHostSource } from "./player/hooks/use-host-source";
 import { useLobbyGate } from "./player/hooks/use-lobby-gate";
 import type { RoomSyncPillNotice } from "./player/room-sync-pill";
@@ -210,6 +212,8 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     startRoom,
     hostSource,
     sendStatus,
+    sendReaction,
+    onReaction,
     setActivePlayback,
   } = useTogether();
   const stageRef = useRef<HTMLDivElement>(null);
@@ -942,6 +946,19 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     t,
   ]);
 
+  const reactionsSupported = inRoom && (roomSnapshot.relayVersion ?? 0) >= RELAY_SOCIAL_VERSION;
+  const { reactions: floatingReactions, add: addFloatingReaction } = useFloatingReactions({
+    enabled: reactionsSupported,
+    onReaction,
+  });
+  const reactToRoom = useCallback(
+    (emoji: ReactionEmoji) => {
+      sendReaction(emoji);
+      addFloatingReaction(emoji, selfName);
+    },
+    [sendReaction, addFloatingReaction, selfName],
+  );
+
   const activityNotice = useRoomActivityNotice({
     inRoom,
     isHost,
@@ -1667,6 +1684,8 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     participants: roomSnapshot.participants,
     hostClientId: roomSnapshot.hostClientId,
     syncState: roomSnapshot.syncState,
+    participantStatus: roomSnapshot.participantStatus,
+    participantOffset: roomSnapshot.participantOffset,
     avatarsVisible: chromeVisible || !playing,
     presenceMap,
     participantLocations,
@@ -1675,6 +1694,8 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     avatarsHidden,
     chat,
     sendChat,
+    onReact: reactionsSupported ? reactToRoom : undefined,
+    reactions: floatingReactions,
     chromeVisible,
     chatCorner,
     chatHidden,

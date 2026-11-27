@@ -71,6 +71,13 @@ export const RELAY_SYNC_STATUS_VERSION = 12;
 
 export type ParticipantSyncPhase = "ready" | "buffering";
 
+/** Relay version that relays reactions and each guest's distance from the host. */
+export const RELAY_SOCIAL_VERSION = 13;
+
+/** The reactions the relay passes on; anything else is dropped. Keep in step with worker.js. */
+export const REACTION_EMOJI = ["😂", "😮", "😍", "😢", "🔥", "👏", "💀", "👍"] as const;
+export type ReactionEmoji = (typeof REACTION_EMOJI)[number];
+
 export type RoomCommand =
   | { action: "play" }
   | { action: "pause" }
@@ -200,7 +207,15 @@ export type ClientMessage =
       activeAt: number;
       location?: ParticipantLocation;
     }
-  | { t: "status"; room: RoomCode; clientId: string; phase: ParticipantSyncPhase }
+  | {
+      t: "status";
+      room: RoomCode;
+      clientId: string;
+      phase: ParticipantSyncPhase;
+      /** Seconds this guest is ahead (+) or behind (−) the host (relay v13+). */
+      offset?: number;
+    }
+  | { t: "react"; room: RoomCode; clientId: string; emoji: ReactionEmoji }
   | { t: "ping"; room: RoomCode; clientId: string };
 
 export type ServerMessage =
@@ -222,9 +237,11 @@ export type ServerMessage =
       srvAt?: number;
       relayVersion?: number;
       statuses?: Record<string, ParticipantSyncPhase>;
+      offsets?: Record<string, number>;
       hostAway?: boolean;
     }
-  | { t: "participant-status"; clientId: string; phase: ParticipantSyncPhase }
+  | { t: "participant-status"; clientId: string; phase: ParticipantSyncPhase; offset?: number }
+  | { t: "reaction"; from: string; name: string; emoji: ReactionEmoji; at: number }
   | { t: "participant-away"; clientId: string }
   | { t: "host-away"; clientId: string }
   | { t: "participant-joined"; participant: Participant }

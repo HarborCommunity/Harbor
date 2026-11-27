@@ -4,6 +4,7 @@ import { getPlaybackBuffered, getPlaybackPosition } from "@/lib/player/playback-
 import type { PartialSyncState } from "@/lib/together/provider";
 import type { RoomSnapshot } from "@/lib/together/client";
 import {
+  RELAY_SOCIAL_VERSION,
   RELAY_SYNC_STATUS_VERSION,
   type ParticipantSyncPhase,
   type RoomCommand,
@@ -20,6 +21,7 @@ import {
   type HostSample,
   type TimelineAnchor,
 } from "@/lib/together/timeline";
+import { reportedOffset } from "@/lib/together/sync-health";
 import type { PlayerSrc } from "@/lib/view";
 import {
   SYNC_DRIFT_TOLERANCE_S,
@@ -49,6 +51,8 @@ const ACTIVITY_FRESH_MS = 5000;
 const BUFFERING_REPORT_MS = 1000;
 /** A guest that reported buffering is ready again once this much is buffered. */
 const READY_BUFFER_S = 2;
+/** A new distance from the host is reported only once it has held this long. */
+const OFFSET_STEADY_MS = 1500;
 
 function syncTarget(state: SyncState, duration: number): number {
   const age = Math.min(SYNC_MAX_AGE_S, Math.max(0, (Date.now() - state.updatedAt) / 1000));
@@ -99,7 +103,7 @@ export function useRoomSync(params: {
   onIncomingState: (cb: (state: SyncState) => void) => () => void;
   onIncomingCommand: (cb: (from: string, command: RoomCommand) => void) => () => void;
   markReady: (ready: boolean) => void;
-  sendStatus?: (phase: ParticipantSyncPhase) => void;
+  sendStatus?: (phase: ParticipantSyncPhase, offset?: number) => void;
   claimHost?: (fresh: boolean) => void;
   dropPolicy?: DropPolicy;
   suppressOutgoingFor: (ms: number) => void;
@@ -423,15 +427,34 @@ export function useRoomSync(params: {
     bridgeRef.current?.play({ reason: "room-hold" }).catch(() => {});
   };
 
-  // Tell the room when this guest is stuck buffering, so the host can wait (relay v12+).
+  // Tell the room when this guest is stuck buffering, so the host can wait (relay v12+),
+  // and how far it is from the host when that is more than anyone could miss (v13+).
   const statusSupported = (roomSnapshot.relayVersion ?? 0) >= RELAY_SYNC_STATUS_VERSION;
+  const offsetSupported = (roomSnapshot.relayVersion ?? 0) >= RELAY_SOCIAL_VERSION;
   useEffect(() => {
     if (!inRoom || isHost || !hasStarted || !statusSupported || !sendStatus) return;
     let sent: ParticipantSyncPhase | null = null;
+    let sentOffset = 0;
+    let candidate: { value: number; since: number } | null = null;
     let bufferingSince: number | null = null;
+    const measureOffset = (now: number): number | null => {
+      const anchor = anchorRef.current;
+      if (!anchor || scheduledPlayRef.current != null || bufferingRef.current) return null;
+      if (now - lastSeekAtRef.current < SEEK_SETTLE_MS) return null;
+      return reportedOffset(
+        getPlaybackPosition() - expectedPosition(anchor, now, durationRef.current),
+      );
+    };
     const tick = () => {
       if (cast?.activeRef.current) return;
       const now = Date.now();
+      let offsetToSend: number | null = null;
+      if (offsetSupported) {
+        const value = measureOffset(now);
+        if (value == null || value === sentOffset) candidate = null;
+        else if (!candidate || candidate.value !== value) candidate = { value, since: now };
+        else if (now - candidate.since >= OFFSET_STEADY_MS) offsetToSend = value;
+      }
       let next = sent;
       if (bufferingRef.current && statusRef.current === "playing") {
         bufferingSince ??= now;
@@ -445,17 +468,21 @@ export function useRoomSync(params: {
           if (buffered >= READY_BUFFER_S || nearEof) next = "ready";
         }
       }
-      if (next && next !== sent) {
-        sent = next;
-        sendStatus(next);
+      if (offsetToSend != null) {
+        sentOffset = offsetToSend;
+        candidate = null;
+      }
+      if ((next && next !== sent) || offsetToSend != null) {
+        sent = next ?? "ready";
+        sendStatus(sent, offsetSupported ? sentOffset : undefined);
       }
     };
     const id = window.setInterval(tick, GUEST_CORRECTION_TICK_MS);
     return () => {
       window.clearInterval(id);
-      if (sent === "buffering") sendStatus("ready");
+      if (sent === "buffering" || sentOffset !== 0) sendStatus("ready");
     };
-  }, [inRoom, isHost, hasStarted, statusSupported, sendStatus, mediaKey, cast]);
+  }, [inRoom, isHost, hasStarted, statusSupported, offsetSupported, sendStatus, mediaKey, cast]);
 
   useEffect(() => {
     if (!inRoom || !cast) return;

@@ -1,9 +1,20 @@
-import { Crown, DoorOpen, Pause, WifiOff } from "lucide-react";
+import { Crown, DoorOpen, LoaderCircle, Pause, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import { nameColor } from "@/lib/together/colors";
 import { useSelfIdentity } from "@/lib/together/use-self-identity";
 import type { PanelCorner } from "@/lib/player-chrome";
-import type { Participant, ParticipantLocation, SyncState } from "@/lib/together/protocol";
+import type {
+  Participant,
+  ParticipantLocation,
+  ParticipantSyncPhase,
+  SyncState,
+} from "@/lib/together/protocol";
+import {
+  FAR_OFFSET_S,
+  needsAttention,
+  syncHealth,
+  type SyncHealth,
+} from "@/lib/together/sync-health";
 import { whoPaused } from "@/lib/together/who-paused";
 import { useT } from "@/lib/i18n";
 
@@ -21,6 +32,8 @@ export function AvatarDock({
   selfId,
   hostId,
   syncState,
+  participantStatus = {},
+  participantOffset = {},
   visible,
   presenceMap,
   participantLocations,
@@ -32,6 +45,8 @@ export function AvatarDock({
   selfId: string;
   hostId: string | null;
   syncState: SyncState | null;
+  participantStatus?: Record<string, ParticipantSyncPhase>;
+  participantOffset?: Record<string, number>;
   visible: boolean;
   presenceMap: Map<string, number>;
   participantLocations: Map<string, ParticipantLocation>;
@@ -50,7 +65,8 @@ export function AvatarDock({
     const stale = now - lastSeen > ACTIVE_THRESHOLD_MS;
     const loc = participantLocations.get(p.id);
     const leftPlayer = !!loc && loc.kind !== "player";
-    return stale || leftPlayer || p.id === lastPauserId || !p.ready;
+    const health = syncHealth(participantStatus[p.id], participantOffset[p.id]);
+    return stale || leftPlayer || p.id === lastPauserId || !p.ready || needsAttention(health);
   });
   const surface = visible || attention;
 
@@ -77,6 +93,7 @@ export function AvatarDock({
               isPauser={p.id === lastPauserId}
               isStale={stale}
               leftPlayer={leftPlayer}
+              health={syncHealth(participantStatus[p.id], participantOffset[p.id])}
             />
           );
         })}
@@ -92,6 +109,7 @@ function Avatar({
   isPauser,
   isStale,
   leftPlayer,
+  health,
 }: {
   participant: Participant;
   isSelf: boolean;
@@ -99,6 +117,7 @@ function Avatar({
   isPauser: boolean;
   isStale: boolean;
   leftPlayer: boolean;
+  health: SyncHealth;
 }) {
   const t = useT();
   const { avatar: selfAvatar, color: selfColor } = useSelfIdentity();
@@ -119,6 +138,9 @@ function Avatar({
         {isStale && t(" · away")}
         {isPauser && t(" · paused")}
         {leftPlayer && t(" · left the video")}
+        {health.kind === "loading" && t(" · loading")}
+        {health.kind === "behind" && t(" · {n}s behind", { n: health.seconds })}
+        {health.kind === "ahead" && t(" · {n}s ahead", { n: health.seconds })}
       </span>
       <span
         aria-label={participant.name}
@@ -155,6 +177,26 @@ function Avatar({
             <Pause size={11} fill="currentColor" strokeWidth={0} />
           </span>
         )}
+        {health.kind === "loading" && !isPauser && !leftPlayer && !isStale && (
+          <span className="pointer-events-none absolute -bottom-1 -end-1 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full bg-black/85 text-white/80 ring-1 ring-white/20">
+            <LoaderCircle size={11} strokeWidth={2.4} className="motion-safe:animate-spin" />
+          </span>
+        )}
+        {(health.kind === "behind" || health.kind === "ahead") &&
+          !isPauser &&
+          !leftPlayer &&
+          !isStale && (
+            <span
+              className={`pointer-events-none absolute -bottom-1 -end-2 z-10 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[9.5px] font-bold tabular-nums ring-1 ring-white/20 ${
+                health.seconds >= FAR_OFFSET_S
+                  ? "bg-amber-300 text-black"
+                  : "bg-black/85 text-white/80"
+              }`}
+            >
+              {health.kind === "behind" ? "−" : "+"}
+              {health.seconds}s
+            </span>
+          )}
         {isStale && !isPauser && !leftPlayer && (
           <span className="pointer-events-none absolute -bottom-1 -end-1 z-10 inline-flex h-5 w-5 items-center justify-center rounded-full bg-black/85 text-white/70 ring-1 ring-white/20">
             <WifiOff size={10} strokeWidth={2.4} />

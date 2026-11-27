@@ -260,3 +260,61 @@ test("an away host that never returns hands the role over", async () => {
   await r.alarm();
   assert.equal(r.hostClientId, "guest");
 });
+
+test("reactions reach everyone else, only from the fixed set, at most five per two seconds", async () => {
+  const { r, join } = await room();
+  const host = join("host");
+  const guest = join("guest");
+  r.onMessage(guest, { t: "react", emoji: "🔥" });
+  const got = host.last("reaction");
+  assert.equal(got.from, "guest");
+  assert.equal(got.name, "guest");
+  assert.equal(got.emoji, "🔥");
+  assert.equal(guest.last("reaction"), undefined, "the sender shows its own reaction locally");
+  r.onMessage(guest, { t: "react", emoji: "<script>" });
+  r.onMessage(guest, { t: "react", emoji: "🍕" });
+  assert.equal(host.sent.filter((m) => m.t === "reaction").length, 1);
+  for (let i = 0; i < 10; i++) r.onMessage(guest, { t: "react", emoji: "😂" });
+  assert.equal(host.sent.filter((m) => m.t === "reaction").length, 5);
+});
+
+test("a guest's distance from the host is relayed, kept for late joiners and cleared", async () => {
+  const { r, join } = await room();
+  const host = join("host");
+  const guest = join("guest");
+  r.onMessage(guest, { t: "status", phase: "ready", offset: -5.04 });
+  assert.deepEqual(host.last("participant-status"), {
+    t: "participant-status",
+    clientId: "guest",
+    phase: "ready",
+    offset: -5,
+  });
+  assert.deepEqual(join("late").last("joined").offsets, { guest: -5 });
+  r.onMessage(guest, { t: "status", phase: "ready", offset: "far" });
+  assert.equal(host.last("participant-status").offset, undefined);
+  r.onMessage(guest, { t: "status", phase: "ready", offset: 1e9 });
+  assert.equal(host.last("participant-status").offset, 3600);
+});
+
+test("the host's cause and lock are passed on only when well formed", async () => {
+  const { r, join } = await room();
+  const host = join("host");
+  const guest = join("guest");
+  r.onMessage(
+    host,
+    stateMsg({
+      hostOnly: true,
+      cause: { by: "guest", action: "pause", id: 7, extra: "x".repeat(10) },
+    }),
+  );
+  const ok = guest.last("state").state;
+  assert.equal(ok.hostOnly, true);
+  assert.deepEqual(ok.cause, { by: "guest", action: "pause", id: 7 });
+  r.onMessage(
+    host,
+    stateMsg({ hostOnly: "yes", cause: { by: "guest", action: "explode", id: 8 } }),
+  );
+  const bad = guest.last("state").state;
+  assert.equal(bad.hostOnly, undefined);
+  assert.equal(bad.cause, undefined);
+});

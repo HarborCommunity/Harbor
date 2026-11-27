@@ -26,6 +26,7 @@ import type {
   IncomingHostLeaving,
   IncomingInvite,
   IncomingParticipantLeft,
+  IncomingReaction,
   IncomingSummon,
   PartialSyncState,
   RemoteCursor,
@@ -47,6 +48,7 @@ import {
   type ParticipantLocation,
   type ParticipantSyncPhase,
   type PlayInvite,
+  type ReactionEmoji,
   type RoomCommand,
   type SummonTarget,
   type SyncState,
@@ -61,6 +63,7 @@ export type {
   IncomingHostLeaving,
   IncomingInvite,
   IncomingParticipantLeft,
+  IncomingReaction,
   IncomingSummon,
   PartialSyncState,
   RemoteCursor,
@@ -106,8 +109,11 @@ type TogetherValue = {
   hostLocation: ParticipantLocation | null;
   suppressOutgoingFor: (ms: number) => void;
   onIncomingState: (cb: (state: SyncState) => void) => () => void;
-  /** Reports this viewer's watch-party sync phase to the room (relay v12+). */
-  sendStatus: (phase: ParticipantSyncPhase) => void;
+  /** Reports this viewer's watch-party sync phase (relay v12+) and distance from the host (v13+). */
+  sendStatus: (phase: ParticipantSyncPhase, offset?: number) => void;
+  /** Sends a reaction to everyone else in the room (relay v13+). */
+  sendReaction: (emoji: ReactionEmoji) => void;
+  onReaction: (cb: (e: IncomingReaction) => void) => () => void;
   /** The media key playing in this window, or null; see TogetherClient.setActivePlayback. */
   setActivePlayback: (key: string | null) => void;
   /** A room the previous session was in (after a crash or restart), offered once. */
@@ -187,6 +193,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
   const stateListenersRef = useRef<Set<(s: SyncState) => void>>(new Set());
   const commandListenersRef = useRef<Set<(from: string, c: RoomCommand) => void>>(new Set());
   const drawListenersRef = useRef<Set<(e: IncomingDraw) => void>>(new Set());
+  const reactionListenersRef = useRef<Set<(e: IncomingReaction) => void>>(new Set());
   const lastInviteRef = useRef<LastInviteMeta | null>(null);
   const guestPickSettingRef = useRef(settings.togetherGuestsPick);
   guestPickSettingRef.current = settings.togetherGuestsPick;
@@ -203,6 +210,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
     relayVersion: null,
     lastError: null,
     participantStatus: {},
+    participantOffset: {},
     hostAway: false,
   });
   const activePlaybackRef = useRef<string | null>(null);
@@ -253,6 +261,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
         stateListenersRef,
         commandListenersRef,
         drawListenersRef,
+        reactionListenersRef,
         lastInviteRef,
         setSnapshot,
         setCursorMap,
@@ -271,6 +280,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       stateListenersRef.current.clear();
       commandListenersRef.current.clear();
       drawListenersRef.current.clear();
+      reactionListenersRef.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [relayUrl]);
@@ -499,8 +509,19 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
     join: joinFromRejoin,
   });
 
-  const sendStatus = useCallback((phase: ParticipantSyncPhase) => {
-    clientRef.current?.sendStatus(phase);
+  const sendStatus = useCallback((phase: ParticipantSyncPhase, offset?: number) => {
+    clientRef.current?.sendStatus(phase, offset);
+  }, []);
+
+  const sendReaction = useCallback((emoji: ReactionEmoji) => {
+    clientRef.current?.sendReaction(emoji);
+  }, []);
+
+  const onReaction = useCallback((cb: (e: IncomingReaction) => void) => {
+    reactionListenersRef.current.add(cb);
+    return () => {
+      reactionListenersRef.current.delete(cb);
+    };
   }, []);
 
   const setActivePlayback = useCallback((key: string | null) => {
@@ -556,6 +577,8 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       suppressOutgoingFor,
       onIncomingState,
       sendStatus,
+      sendReaction,
+      onReaction,
       setActivePlayback,
       rejoinOffer,
       acceptRejoin,
@@ -611,6 +634,8 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       suppressOutgoingFor,
       onIncomingState,
       sendStatus,
+      sendReaction,
+      onReaction,
       setActivePlayback,
       rejoinOffer,
       acceptRejoin,

@@ -1,11 +1,13 @@
 import type { ListenQueue, ListenSong, SongRequestAction } from "@/lib/listen-together/queue";
 import {
+  REACTION_EMOJI,
   WT_PROTO,
   type ClientMessage,
   type Participant,
   type ParticipantSyncPhase,
   type ParticipantLocation,
   type PlayInvite,
+  type ReactionEmoji,
   type RoomCode,
   type RoomCommand,
   type ServerMessage,
@@ -116,6 +118,7 @@ export class TogetherClient {
       relayVersion: null,
       lastError: null,
       participantStatus: {},
+      participantOffset: {},
       hostAway: false,
     };
   }
@@ -231,6 +234,7 @@ export class TogetherClient {
       started: false,
       relayVersion: null,
       participantStatus: {},
+      participantOffset: {},
       hostAway: false,
     });
     this.openSocket();
@@ -266,6 +270,7 @@ export class TogetherClient {
       listenSessionId: undefined,
       lastError: null,
       participantStatus: {},
+      participantOffset: {},
       hostAway: false,
     });
   }
@@ -385,9 +390,21 @@ export class TogetherClient {
     this.sendNow({ t: "cmd", room: this.room, clientId: this.clientId, command });
   }
 
-  sendStatus(phase: ParticipantSyncPhase): void {
+  sendStatus(phase: ParticipantSyncPhase, offset?: number): void {
     if (!this.room || this.ws?.readyState !== WebSocket.OPEN) return;
-    this.sendNow({ t: "status", room: this.room, clientId: this.clientId, phase });
+    this.sendNow({
+      t: "status",
+      room: this.room,
+      clientId: this.clientId,
+      phase,
+      ...(offset != null && { offset }),
+    });
+  }
+
+  /** Reactions are momentary: one that can't go out now is dropped, not queued. */
+  sendReaction(emoji: ReactionEmoji): void {
+    if (!this.room || this.ws?.readyState !== WebSocket.OPEN) return;
+    this.sendNow({ t: "react", room: this.room, clientId: this.clientId, emoji });
   }
 
   /** Converts the app's local sample and start times to relay time for the wire. */
@@ -618,6 +635,7 @@ export class TogetherClient {
           started: msg.started ?? false,
           relayVersion: typeof msg.relayVersion === "number" ? msg.relayVersion : null,
           participantStatus: { ...msg.statuses },
+          participantOffset: { ...msg.offsets },
           hostAway: msg.hostAway === true,
         });
         this.reconcileHostClaim(msg.hostClientId);
@@ -678,9 +696,12 @@ export class TogetherClient {
         // from a crashed connection must not keep the room waiting.
         const participantStatus = { ...this.snapshot.participantStatus };
         delete participantStatus[incoming.id];
+        const participantOffset = { ...this.snapshot.participantOffset };
+        delete participantOffset[incoming.id];
         this.update({
           participants: nextParticipants,
           participantStatus,
+          participantOffset,
           ...(incoming.id === this.snapshot.hostClientId && { hostAway: false }),
         });
         if (incoming.id !== this.clientId && this.room && this.ws?.readyState === WebSocket.OPEN) {
@@ -721,18 +742,27 @@ export class TogetherClient {
         });
         const participantStatus = { ...this.snapshot.participantStatus };
         delete participantStatus[msg.clientId];
+        const participantOffset = { ...this.snapshot.participantOffset };
+        delete participantOffset[msg.clientId];
         this.update({
           participants: this.snapshot.participants.filter((p) => p.id !== msg.clientId),
           participantStatus,
+          participantOffset,
         });
         return;
       }
-      case "participant-status":
+      case "participant-status": {
         if (msg.phase !== "ready" && msg.phase !== "buffering") return;
+        const participantOffset = { ...this.snapshot.participantOffset };
+        if (typeof msg.offset === "number" && Number.isFinite(msg.offset))
+          participantOffset[msg.clientId] = msg.offset;
+        else delete participantOffset[msg.clientId];
         this.update({
           participantStatus: { ...this.snapshot.participantStatus, [msg.clientId]: msg.phase },
+          participantOffset,
         });
         return;
+      }
       case "participant-away":
         this.update({
           participants: this.snapshot.participants.map((p) =>
@@ -775,6 +805,16 @@ export class TogetherClient {
         return;
       case "chat":
         this.emit({ kind: "chat", from: msg.from, name: msg.name, text: msg.text, at: msg.at });
+        return;
+      case "reaction":
+        if (msg.from === this.clientId || !REACTION_EMOJI.includes(msg.emoji)) return;
+        this.emit({
+          kind: "reaction",
+          from: msg.from,
+          name: msg.name,
+          emoji: msg.emoji,
+          at: msg.at,
+        });
         return;
       case "invite":
         if (msg.from === this.clientId) return;

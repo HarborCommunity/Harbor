@@ -8,6 +8,7 @@ import type {
   IncomingHostLeaving,
   IncomingInvite,
   IncomingParticipantLeft,
+  IncomingReaction,
   IncomingSummon,
   RemoteCursor,
 } from "./provider-types";
@@ -37,6 +38,7 @@ export type RoomEventSinks = {
   stateListenersRef: RefObject<Set<(s: SyncState) => void>>;
   commandListenersRef: RefObject<Set<(from: string, c: RoomCommand) => void>>;
   drawListenersRef: RefObject<Set<(e: IncomingDraw) => void>>;
+  reactionListenersRef: RefObject<Set<(e: IncomingReaction) => void>>;
   lastInviteRef: RefObject<LastInviteMeta | null>;
   setSnapshot: Dispatch<SetStateAction<RoomSnapshot>>;
   setCursorMap: Dispatch<SetStateAction<Map<string, RemoteCursor>>>;
@@ -55,6 +57,7 @@ export function applyRoomEvent(e: RoomEvent, sinks: RoomEventSinks): void {
     stateListenersRef,
     commandListenersRef,
     drawListenersRef,
+    reactionListenersRef,
     lastInviteRef,
     setSnapshot,
     setCursorMap,
@@ -123,6 +126,9 @@ export function applyRoomEvent(e: RoomEvent, sinks: RoomEventSinks): void {
     });
   } else if (e.kind === "draw") {
     for (const l of drawListenersRef.current) l(e);
+  } else if (e.kind === "reaction") {
+    for (const l of reactionListenersRef.current)
+      l({ from: e.from, name: e.name, emoji: e.emoji, at: e.at });
   } else if (e.kind === "presence") {
     setPresenceMap((cur) => {
       const next = new Map(cur);

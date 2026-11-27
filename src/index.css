@@ -2634,6 +2634,45 @@ main[data-kids="on"]::-webkit-scrollbar-thumb:hover {
   transform-origin: top right;
 }
 
+@keyframes harbor-reaction-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scale(0.6);
+  }
+  12% {
+    opacity: 1;
+    transform: translateY(-24px) scale(1.12);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-210px) scale(1);
+  }
+}
+
+@keyframes harbor-reaction-fade {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  12%,
+  75% {
+    opacity: 1;
+  }
+}
+
+.harbor-reaction-rise {
+  animation: harbor-reaction-rise 2800ms var(--ease-out) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .harbor-reaction-rise {
+    animation-name: harbor-reaction-fade;
+  }
+}
+
 @keyframes preview-in {
   from {
     opacity: 0;

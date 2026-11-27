@@ -3692,6 +3692,10 @@ const uiFallback: Record<string, string> = {
   "{name} resumed": "{name} resumed",
   "{name} skipped to {time}": "{name} skipped to {time}",
   "{name} skipped": "{name} skipped",
+  Reactions: "Reactions",
+  " · loading": " · loading",
+  " · {n}s behind": " · {n}s behind",
+  " · {n}s ahead": " · {n}s ahead",
 };
 
 export default uiFallback;

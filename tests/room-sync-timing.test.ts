@@ -105,7 +105,8 @@ function harness(options: { cast?: boolean; started?: boolean; nudge?: boolean }
       getPlaybackPosition: () => position,
       getPlaybackBuffered: () => buffered,
     },
-    "@/lib/together/protocol": { RELAY_SYNC_STATUS_VERSION: 12 },
+    "@/lib/together/protocol": { RELAY_SYNC_STATUS_VERSION: 12, RELAY_SOCIAL_VERSION: 13 },
+    "@/lib/together/sync-health": { reportedOffset: () => 0 },
     "@/lib/together/timeline": timeline,
     "./use-room-host-sync": {
       useRoomHostSync: () => ({

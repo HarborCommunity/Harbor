@@ -4,6 +4,7 @@ import type {
   ParticipantLocation,
   ParticipantSyncPhase,
   PlayInvite,
+  ReactionEmoji,
   RoomCode,
   RoomCommand,
   SummonTarget,
@@ -23,6 +24,8 @@ export type RoomSnapshot = {
   lastError: string | null;
   /** Latest sync phase each participant reported (relay v12+). */
   participantStatus: Record<string, ParticipantSyncPhase>;
+  /** Seconds each guest last reported being ahead (+) or behind (−) the host (relay v13+). */
+  participantOffset: Record<string, number>;
   /** The host's connection dropped and the relay is holding its role (relay v12+). */
   hostAway: boolean;
   listenSessionId?: string;
@@ -38,6 +41,7 @@ export type RoomEvent =
   | { kind: "incoming-state"; state: SyncState }
   | { kind: "incoming-command"; from: string; command: RoomCommand }
   | { kind: "chat"; from: string; name: string; text: string; at: number }
+  | { kind: "reaction"; from: string; name: string; emoji: ReactionEmoji; at: number }
   | { kind: "invite"; from: string; name: string; invite: PlayInvite; at: number }
   | { kind: "host-leaving"; from: string; name: string; at: number }
   | { kind: "summon"; from: string; name: string; target: SummonTarget; at: number }

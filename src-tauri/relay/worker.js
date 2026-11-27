@@ -1,4 +1,4 @@
-const WORKER_VERSION = 12;
+const WORKER_VERSION = 13;
 const MAX_AVATAR_LENGTH = 600_000;
 
 function sanitizeAvatar(v) {
@@ -155,6 +155,27 @@ const AWAY_GRACE_MS = 120_000;
 // Unchanged playback is written to storage at most this often.
 const SYNC_SAVE_MS = 10_000;
 const SYNC_PHASES = new Set(["ready", "buffering"]);
+// Reactions are a fixed set, so nothing but these few characters is relayed.
+const REACTIONS = new Set(["😂", "😮", "😍", "😢", "🔥", "👏", "💀", "👍"]);
+// Each person may send this many reactions per window; extra taps are dropped.
+const REACTION_BURST = 5;
+const REACTION_WINDOW_MS = 2_000;
+// A guest's distance from the host's timeline, in seconds, as it reports it.
+const MAX_SYNC_OFFSET_S = 3_600;
+const PLAYBACK_ACTIONS = new Set(["play", "pause", "seek"]);
+
+function sanitizeOffset(v) {
+  if (typeof v !== "number" || !isFinite(v)) return undefined;
+  return Math.round(Math.max(-MAX_SYNC_OFFSET_S, Math.min(MAX_SYNC_OFFSET_S, v)) * 10) / 10;
+}
+
+function sanitizeCause(v) {
+  if (!v || typeof v !== "object") return undefined;
+  if (typeof v.by !== "string" || v.by.length === 0 || v.by.length > 64) return undefined;
+  if (!PLAYBACK_ACTIONS.has(v.action)) return undefined;
+  if (typeof v.id !== "number" || !isFinite(v.id)) return undefined;
+  return { by: v.by, action: v.action, id: v.id };
+}
 
 function peerAttachment(p) {
   return {
@@ -164,6 +185,7 @@ function peerAttachment(p) {
     ready: p.ready,
     color: p.color,
     status: p.status,
+    offset: p.offset,
   };
 }
 
@@ -337,6 +359,8 @@ export class Room {
         return this.handlePresence(socket, msg);
       case "status":
         return this.handleStatus(socket, msg);
+      case "react":
+        return this.handleReact(socket, msg);
       case "ping":
         return this.send(socket, { t: "pong", srvAt: Date.now() });
     }
@@ -353,10 +377,31 @@ export class Room {
   handleStatus(socket, msg) {
     const peer = this.peers.get(socket);
     if (!peer || !SYNC_PHASES.has(msg.phase)) return;
-    if (peer.status === msg.phase) return;
+    const offset = sanitizeOffset(msg.offset);
+    // Nothing new to tell the room: same phase and the same distance from the host.
+    if (peer.status === msg.phase && peer.offset === offset) return;
     peer.status = msg.phase;
+    peer.offset = offset;
     this.attach(socket, peer);
-    this.broadcast({ t: "participant-status", clientId: peer.clientId, phase: peer.status });
+    this.broadcast({
+      t: "participant-status",
+      clientId: peer.clientId,
+      phase: peer.status,
+      ...(peer.offset != null && { offset: peer.offset }),
+    });
+  }
+
+  handleReact(socket, msg) {
+    const peer = this.peers.get(socket);
+    if (!peer || !REACTIONS.has(msg.emoji)) return;
+    const now = Date.now();
+    peer.reactedAt = (peer.reactedAt ?? []).filter((at) => now - at < REACTION_WINDOW_MS);
+    if (peer.reactedAt.length >= REACTION_BURST) return;
+    peer.reactedAt.push(now);
+    this.broadcast(
+      { t: "reaction", from: peer.clientId, name: peer.name, emoji: msg.emoji, at: now },
+      socket,
+    );
   }
 
   handleClaimHost(socket, msg) {
@@ -533,7 +578,11 @@ export class Room {
       peer.clientId === this.hostClientId && (wasAway || this.hostAwayUntil != null);
     if (hostReturned) this.endHostGrace();
     const statuses = {};
-    for (const p of this.peers.values()) if (p.status) statuses[p.clientId] = p.status;
+    const offsets = {};
+    for (const p of this.peers.values()) {
+      if (p.status) statuses[p.clientId] = p.status;
+      if (p.offset != null) offsets[p.clientId] = p.offset;
+    }
     const participants = Array.from(this.peers.values()).map((p) => ({
       id: p.clientId,
       name: p.name,
@@ -562,6 +611,7 @@ export class Room {
       srvAt: Date.now(),
       ...(this.syncStateAt != null && { observedAt: this.syncStateAt }),
       statuses,
+      offsets,
       hostAway: this.hostAwayUntil != null || this.away.has(this.hostClientId),
       relayVersion: WORKER_VERSION,
     });
@@ -644,6 +694,10 @@ export class Room {
     else delete s.source;
     if (s.guestPick !== true) delete s.guestPick;
     if (s.waitOnDrop !== true) delete s.waitOnDrop;
+    if (s.hostOnly !== true) delete s.hostOnly;
+    const cause = sanitizeCause(s.cause);
+    if (cause) s.cause = cause;
+    else delete s.cause;
     const isHostWrite = this.hostClientId != null && peer.clientId === this.hostClientId;
     if (this.hostClientId != null && !isHostWrite) return;
     const now = Date.now();
