@@ -86,14 +86,14 @@ export const PanelsLayer = memo(function PanelsLayer({
           aria-label={t("Up next")}
           tabIndex={upNextButtonVisible ? 0 : -1}
           aria-hidden={!upNextButtonVisible}
-          className={`group absolute top-1/2 z-20 flex h-32 -translate-y-1/2 flex-col items-center justify-center gap-2.5 bg-elevated/45 text-ink shadow-[0_6px_20px_-10px_rgba(0,0,0,0.5)] backdrop-blur-md transition-[padding,background,opacity] duration-300 hover:bg-elevated/85 ${
+          className={`group absolute top-1/2 z-20 flex h-32 -translate-y-1/2 flex-col items-center justify-center gap-2.5 bg-elevated/85 text-ink shadow-[0_8px_28px_-8px_rgba(0,0,0,0.75)] backdrop-blur-md transition-[padding,background,opacity] duration-300 hover:bg-elevated ${
             upNextButtonVisible
-              ? "pointer-events-auto opacity-40 hover:opacity-100"
+              ? "pointer-events-auto opacity-90 hover:opacity-100"
               : "pointer-events-none opacity-0"
           } ${
             episodesCorner === "top-left" || episodesCorner === "bottom-left"
-              ? "left-0 rounded-r-2xl border-y border-r border-edge-soft pl-2 pr-2.5 hover:pr-3"
-              : "right-0 rounded-l-2xl border-y border-l border-edge-soft pl-2.5 pr-2 hover:pl-3"
+              ? "left-0 rounded-r-2xl border-y border-r border-edge pl-2 pr-2.5 hover:pr-3"
+              : "right-0 rounded-l-2xl border-y border-l border-edge pl-2.5 pr-2 hover:pl-3"
           }`}
         >
           <img
