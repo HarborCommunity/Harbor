@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { LottiePlayer } from "@/components/lottie-player";
 import waitingAnim from "@/assets/lottie/wt-waiting-white.json";
 import { formatNames } from "./player-utils";
@@ -47,6 +48,7 @@ export function WaitingForRoom(props: {
   } = props;
   const t = useT();
   const autoStartIn = useSecondsUntil(autoStartAt);
+  const startRef = useRef<HTMLButtonElement>(null);
   const stillLoading = notReady.length;
   return (
     <div className="pointer-events-auto absolute inset-0 z-30 flex items-center justify-center bg-black/72 backdrop-blur-md">
@@ -89,7 +91,12 @@ export function WaitingForRoom(props: {
           {isHost && autoStartAt != null && (
             <button
               type="button"
-              onClick={onCancelAutoStart}
+              onClick={(e) => {
+                // The button goes away on cancel; keep TV and keyboard focus in the lobby.
+                const hadFocus = document.activeElement === e.currentTarget;
+                onCancelAutoStart();
+                if (hadFocus) window.setTimeout(() => startRef.current?.focus(), 0);
+              }}
               className="inline-flex h-10 items-center rounded-full bg-white/15 px-5 text-[13px] font-semibold text-white transition-colors hover:bg-white/25"
             >
               {t("Starting in {n}… Cancel", { n: autoStartIn })}
@@ -97,6 +104,7 @@ export function WaitingForRoom(props: {
           )}
           {isHost && (
             <button
+              ref={startRef}
               type="button"
               onClick={onStart}
               className="inline-flex h-10 items-center gap-2 rounded-full bg-white px-5 text-[13px] font-semibold text-black transition-transform hover:scale-[1.02] active:scale-[0.98]"

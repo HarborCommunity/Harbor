@@ -63,7 +63,7 @@ export function AutoStartToggle() {
       setting="togetherAutoStart"
       icon={PlayCircle}
       title={t("Start when everyone is ready")}
-      description={t("Counts down 5 seconds, then plays for the room")}
+      description={t("Counts down, then plays for the room")}
     />
   );
 }

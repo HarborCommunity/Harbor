@@ -61,9 +61,10 @@ export function useLobbyGate(params: {
   const [autoStartCancelled, setAutoStartCancelled] = useState(false);
   const everyoneReady =
     roomSnapshot.participants.length > 0 && roomSnapshot.participants.every((p) => p.ready);
+  // A new title, or switching the setting off and on, arms the countdown again.
   useEffect(() => {
     setAutoStartCancelled(false);
-  }, [mediaKey]);
+  }, [mediaKey, autoStart]);
   useEffect(() => {
     if (!inRoom || !isHost || hasStarted || !autoStart || autoStartCancelled || !everyoneReady) {
       setAutoStartAt(null);

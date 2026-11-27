@@ -59,6 +59,7 @@ import { usePlayerWatched } from "./player/hooks/use-player-watched";
 import { useHoldSpeed } from "./player/hooks/use-hold-speed";
 import { EXTERNAL_PLAYER_CLOSED_EVENT } from "@/lib/player/external-mpv";
 import { useRoomSync } from "./player/hooks/use-room-sync";
+import { setHostMove } from "@/lib/together/host-move";
 import { playbackKey } from "@/lib/together/client";
 import { useHostSource } from "./player/hooks/use-host-source";
 import { useLobbyGate } from "./player/hooks/use-lobby-gate";
@@ -638,12 +639,13 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
   const playFromEndScreen = useCallback(
     (meta: Parameters<typeof openPicker>[0]) => {
       stayInRoomRef.current = true;
+      if (inRoom && isHost) setHostMove("armed");
       void closePlayer().finally(() => {
         stayInRoomRef.current = false;
         openPicker(meta, undefined, { autoPlay: true });
       });
     },
-    [closePlayer, openPicker],
+    [closePlayer, openPicker, inRoom, isHost],
   );
   const endScreen = useEndScreen({
     src,
