@@ -313,3 +313,34 @@ test("while something plays the connection is pinged every 5 s and a silent one 
   assert.equal(socket.readyState, 3, "a silent socket is closed and replaced");
   h.client.setActivePlayback(null);
 });
+
+test("host sample and start times are sent in relay time", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  const socket = h.sockets.at(-1)!;
+  socket.open();
+  socket.message({
+    t: "joined",
+    participants: [{ id: "self", name: "Fixture" }],
+    hostClientId: "self",
+    state: null,
+    started: true,
+    srvAt: 105000,
+  });
+  h.client.publishState({
+    mediaId: "tt1",
+    mediaTitle: null,
+    episode: null,
+    posterUrl: null,
+    positionSeconds: 1,
+    playing: true,
+    sampledAt: 100000,
+    playAt: 101000,
+    updatedAt: 100000,
+    updatedBy: "self",
+    hostClientId: null,
+  });
+  const sent = socket.sent.find((m) => m.t === "state").state;
+  assert.equal(sent.sampledAt, 105000);
+  assert.equal(sent.playAt, 106000);
+});

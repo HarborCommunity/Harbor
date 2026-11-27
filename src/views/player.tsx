@@ -62,6 +62,7 @@ import { useRoomSync } from "./player/hooks/use-room-sync";
 import { playbackKey } from "@/lib/together/client";
 import { useHostSource } from "./player/hooks/use-host-source";
 import { useLobbyGate } from "./player/hooks/use-lobby-gate";
+import type { RoomSyncPillNotice } from "./player/room-sync-pill";
 import { hostSourceMatchesMedia } from "@/lib/together/room-derive";
 import { useLiveChannelOverlay } from "./player/hooks/use-live-channel-overlay";
 import { useStreamSwitcher } from "./player/hooks/use-stream-switcher";
@@ -812,7 +813,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     !liveOverlay.isLive &&
     settings.playerEngine !== "auto";
 
-  const { inRoomRef, isHostRef, initialSyncDoneRef } = useRoomSync({
+  const { inRoomRef, isHostRef, initialSyncDoneRef, startTogether, syncNotice } = useRoomSync({
     inRoom,
     isHost,
     hasStarted,
@@ -846,11 +847,19 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     setHasStarted,
     roomSnapshot,
     startRoom,
+    startTogether,
     suppressOutgoingFor,
     bridgeRef,
     initialSyncDoneRef,
     mediaKey: `${src.meta.id}|${src.episode?.season ?? ""}|${src.episode?.episode ?? ""}`,
   });
+
+  const roomSyncNotice = useMemo<RoomSyncPillNotice | null>(() => {
+    if (!inRoom || !hasStarted || !syncNotice) return null;
+    if (syncNotice.kind === "countdown") return syncNotice;
+    const host = roomSnapshot.participants.find((p) => p.id === roomSnapshot.hostClientId);
+    return { kind: "host-buffering", host: host?.name ?? "Host" };
+  }, [inRoom, hasStarted, syncNotice, roomSnapshot.participants, roomSnapshot.hostClientId]);
 
   const { rememberSubChoice, cycleSubtitles, playPauseToggle, seekStep, seekTo } =
     usePlaybackControls({
@@ -1578,6 +1587,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     isHost,
     staleIds: lobby.staleIds,
     guestEscapeReady: lobby.guestEscapeReady,
+    syncNotice: roomSyncNotice,
     onStart: lobby.startHost,
     onPlayWithoutSync: lobby.playWithoutSync,
     guestHostSource,

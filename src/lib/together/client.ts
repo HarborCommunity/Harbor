@@ -21,6 +21,8 @@ const LIVENESS_TIMEOUT_MS = 40_000;
 // While a watch party is playing, a dead connection must be noticed quickly.
 const PLAYBACK_PING_INTERVAL_MS = 5_000;
 const PLAYBACK_LIVENESS_TIMEOUT_MS = 12_000;
+// Ignore a host's sample time that disagrees wildly with when it arrived.
+const MAX_SAMPLE_SKEW_MS = 10_000;
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 const MAX_RENAME_ATTEMPTS = 8;
@@ -66,6 +68,8 @@ export class TogetherClient {
   private reconnectAttempt = 0;
   private intentional = false;
   private suppressUntil = 0;
+  private suppressedState: SyncState | null = null;
+  private suppressTimer: number | null = null;
   private outQueue: ClientMessage[] = [];
   private pendingCommand: { command: RoomCommand; at: number } | null = null;
   private activePlaybackKey: string | null = null;
@@ -156,6 +160,26 @@ export class TogetherClient {
 
   suppressOutgoingFor(ms: number) {
     this.suppressUntil = Date.now() + ms;
+    if (this.suppressTimer != null) {
+      window.clearTimeout(this.suppressTimer);
+      this.suppressTimer = null;
+    }
+    if (ms <= 0) {
+      this.flushSuppressedState();
+      return;
+    }
+    if (this.suppressedState) {
+      this.suppressTimer = window.setTimeout(() => {
+        this.suppressTimer = null;
+        this.flushSuppressedState();
+      }, ms);
+    }
+  }
+
+  private flushSuppressedState() {
+    const state = this.suppressedState;
+    this.suppressedState = null;
+    if (state) this.publishState(state);
   }
 
   /**
@@ -315,8 +339,27 @@ export class TogetherClient {
 
   publishState(state: SyncState): void {
     if (!this.room) return;
-    if (Date.now() < this.suppressUntil) return;
-    this.send({ t: "state", room: this.room, clientId: this.clientId, state });
+    if (Date.now() < this.suppressUntil) {
+      // Keep the newest state instead of dropping it: a host's anchor must
+      // still reach the room once the suppression window ends.
+      this.suppressedState = state;
+      if (this.suppressTimer == null) {
+        this.suppressTimer = window.setTimeout(
+          () => {
+            this.suppressTimer = null;
+            this.flushSuppressedState();
+          },
+          Math.max(0, this.suppressUntil - Date.now()),
+        );
+      }
+      return;
+    }
+    this.send({
+      t: "state",
+      room: this.room,
+      clientId: this.clientId,
+      state: this.toRelayClock(state),
+    });
     this.update({ syncState: state });
   }
 
@@ -328,6 +371,20 @@ export class TogetherClient {
       return;
     }
     this.sendNow({ t: "cmd", room: this.room, clientId: this.clientId, command });
+  }
+
+  /** Converts the app's local sample and start times to relay time for the wire. */
+  private toRelayClock(state: SyncState): SyncState {
+    if (state.sampledAt == null && state.playAt == null) return state;
+    const out = { ...state };
+    if (this.relayOffset == null) {
+      delete out.sampledAt;
+      delete out.playAt;
+      return out;
+    }
+    if (out.sampledAt != null) out.sampledAt += this.relayOffset;
+    if (out.playAt != null) out.playAt += this.relayOffset;
+    return out;
   }
 
   sendChat(text: string): void {
@@ -523,6 +580,8 @@ export class TogetherClient {
         this.attemptResolved = true;
         this.failStreak = 0;
         this.clearWatchdog();
+        if (typeof msg.srvAt === "number" && this.relayOffset == null)
+          this.relayOffset = msg.srvAt - Date.now();
         if (msg.state) this.localizeStateClock(msg.state, msg.srvAt, msg.observedAt);
         this.clearListenQueue();
         this.queueRevision = msg.queue?.revision ?? 0;
@@ -900,10 +959,27 @@ export class TogetherClient {
   }
 
   private localizeStateClock(state: SyncState, srvAt: number | undefined, observedAt?: number) {
-    if (typeof srvAt !== "number") return;
+    if (typeof srvAt !== "number") {
+      delete state.sampledAt;
+      delete state.playAt;
+      return;
+    }
     if (this.relayOffset == null) this.relayOffset = srvAt - Date.now();
+    const offset = this.relayOffset;
     state.updatedAt =
-      (typeof observedAt === "number" ? Math.min(srvAt, observedAt) : srvAt) - this.relayOffset;
+      (typeof observedAt === "number" ? Math.min(srvAt, observedAt) : srvAt) - offset;
+    if (typeof state.sampledAt === "number" && Number.isFinite(state.sampledAt)) {
+      state.sampledAt -= offset;
+      // The host sampled before the relay received it; a later or far earlier
+      // sample means one of the clocks is unreliable, so use the relay's time.
+      if (
+        state.sampledAt > state.updatedAt + 1000 ||
+        state.updatedAt - state.sampledAt > MAX_SAMPLE_SKEW_MS
+      )
+        delete state.sampledAt;
+    } else delete state.sampledAt;
+    if (typeof state.playAt === "number" && Number.isFinite(state.playAt)) state.playAt -= offset;
+    else delete state.playAt;
   }
 
   private resetClockState() {

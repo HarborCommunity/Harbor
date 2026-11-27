@@ -67,7 +67,7 @@ function html5SnapshotHarness() {
     const probeAudio = () => {}, bufferedAhead = () => 0, readHlsAudioTracks = () => null;
     const readAudioTracks = () => [], readCustomSubtitleTracks = () => [];
     const markPlaybackTrace = () => {}, finishPlaybackTrace = () => {}, emit = () => {};
-    const pendingVolume = 1, subDelaySec = 0, mapErrorCode = code => code;
+    const pendingVolume = 1, subDelaySec = 0, mapErrorCode = code => code, syncRateFactor = 1;
     let activeTraceId = null;
     return (${refresh});
   `,

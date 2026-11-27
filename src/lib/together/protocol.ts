@@ -42,6 +42,12 @@ export type SyncState = {
   speed?: number;
   source?: SourceDescriptor;
   guestPick?: boolean;
+  /** The host is waiting for data; the timeline is stopped. Sent by newer hosts. */
+  buffering?: boolean;
+  /** When the host read positionSeconds (relay ms on the wire, local ms in the app). */
+  sampledAt?: number;
+  /** Playback starts at this instant (relay ms on the wire, local ms in the app). */
+  playAt?: number;
   updatedAt: number;
   updatedBy: string;
   hostClientId: string | null;

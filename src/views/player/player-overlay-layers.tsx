@@ -173,6 +173,7 @@ export type PlayerOverlayLayersProps = {
   switcherOpen: boolean;
   foreignNotice: Room["foreignNotice"];
   onDismissForeign: () => void;
+  syncNotice: Room["syncNotice"];
   streamPillVariant: Pill["variant"] | null;
   mpvEmbedWindowsActive: boolean;
   setStreamCheckOpen: (v: boolean) => void;
@@ -475,6 +476,7 @@ export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOv
         onFindCloser={p.pickAnother}
         foreignNotice={p.foreignNotice}
         onDismissForeign={p.onDismissForeign}
+        syncNotice={p.syncNotice}
       />
 
       {p.streamPillVariant && !p.switcherOpen && (
