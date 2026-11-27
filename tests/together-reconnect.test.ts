@@ -202,3 +202,66 @@ test("duplicate close callbacks schedule only one reconnect", () => {
   h.advance(1000);
   assert.equal(h.sockets.length, 2);
 });
+
+test("a viewer already playing the room's media is not invited again on rejoin", () => {
+  const h = harness();
+  const invites: any[] = [];
+  h.client.on((e: any) => {
+    if (e.kind === "invite") invites.push(e.invite);
+  });
+  h.client.setActivePlayback("tt9|1|2");
+  h.client.join("ABC123");
+  const socket = h.sockets.at(-1)!;
+  socket.open();
+  const joinedWith = (episode: number) =>
+    socket.message({
+      t: "joined",
+      participants: [
+        { id: "self", name: "Fixture" },
+        { id: "host", name: "Host" },
+      ],
+      hostClientId: "host",
+      state: {
+        mediaId: "tt9",
+        mediaTitle: "Show",
+        episode: { season: 1, episode },
+        posterUrl: null,
+        positionSeconds: 10,
+        playing: true,
+        updatedAt: 0,
+        updatedBy: "host",
+        hostClientId: "host",
+      },
+      started: true,
+      srvAt: 100000,
+    });
+  joinedWith(2);
+  assert.equal(invites.length, 0);
+  socket.message({
+    t: "invite",
+    from: "host",
+    name: "Host",
+    invite: { mediaId: "tt9", episode: { season: 1, episode: 2 } },
+    at: 1,
+  });
+  assert.equal(invites.length, 0);
+  joinedWith(3);
+  assert.equal(invites.length, 1);
+});
+
+test("guest commands sent while disconnected go out once the room is back", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  h.joined();
+  h.sockets[0].close();
+  h.advance(0);
+  h.client.sendCommand({ action: "seek", positionSeconds: 5 });
+  h.client.sendCommand({ action: "pause" });
+  h.advance(1000);
+  h.joined();
+  const commands = h.sockets[1].sent.filter((m) => m.t === "cmd");
+  assert.deepEqual(
+    commands.map((m) => m.command),
+    [{ action: "pause" }],
+  );
+});

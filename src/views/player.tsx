@@ -205,6 +205,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     participantLocations,
     startRoom,
     hostSource,
+    setActivePlayback,
   } = useTogether();
   const stageRef = useRef<HTMLDivElement>(null);
   const refreshDockGeometry = useCallback(
@@ -831,6 +832,11 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     setForeignNotice,
     cast: cast.sync,
   });
+  const playbackKey = `${src.meta.id}|${src.episode?.season ?? ""}|${src.episode?.episode ?? ""}`;
+  useEffect(() => {
+    setActivePlayback(playbackKey);
+    return () => setActivePlayback(null);
+  }, [playbackKey, setActivePlayback]);
 
   const lobby = useLobbyGate({
     inRoom,
