@@ -53,6 +53,11 @@ export type SyncState = {
   hostClientId: string | null;
 };
 
+/** Relay version that understands participant status and host grace periods. */
+export const RELAY_SYNC_STATUS_VERSION = 12;
+
+export type ParticipantSyncPhase = "ready" | "buffering";
+
 export type RoomCommand =
   | { action: "play" }
   | { action: "pause" }
@@ -182,6 +187,7 @@ export type ClientMessage =
       activeAt: number;
       location?: ParticipantLocation;
     }
+  | { t: "status"; room: RoomCode; clientId: string; phase: ParticipantSyncPhase }
   | { t: "ping"; room: RoomCode; clientId: string };
 
 export type ServerMessage =
@@ -202,7 +208,11 @@ export type ServerMessage =
       started?: boolean;
       srvAt?: number;
       relayVersion?: number;
+      statuses?: Record<string, ParticipantSyncPhase>;
+      hostAway?: boolean;
     }
+  | { t: "participant-status"; clientId: string; phase: ParticipantSyncPhase }
+  | { t: "host-away"; clientId: string }
   | { t: "participant-joined"; participant: Participant }
   | { t: "participant-left"; clientId: string; name?: string }
   | { t: "started"; started: boolean }

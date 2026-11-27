@@ -3667,7 +3667,9 @@ const uiFallback: Record<string, string> = {
   "Counts down, then plays for the room": "Counts down, then plays for the room",
   "Starting together in {n}…": "Starting together in {n}…",
   "Waiting for {name} to load…": "Waiting for {name} to load…",
+  "Waiting for {names} to load…": "Waiting for {names} to load…",
   "Starting in {n}… Cancel": "Starting in {n}… Cancel",
+  "Keep watching": "Keep watching",
 };
 
 export default uiFallback;

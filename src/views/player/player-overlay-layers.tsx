@@ -174,6 +174,7 @@ export type PlayerOverlayLayersProps = {
   foreignNotice: Room["foreignNotice"];
   onDismissForeign: () => void;
   syncNotice: Room["syncNotice"];
+  onKeepWatching?: () => void;
   autoStartAt: Room["autoStartAt"];
   onCancelAutoStart: () => void;
   streamPillVariant: Pill["variant"] | null;
@@ -479,6 +480,7 @@ export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOv
         foreignNotice={p.foreignNotice}
         onDismissForeign={p.onDismissForeign}
         syncNotice={p.syncNotice}
+        onKeepWatching={p.onKeepWatching}
         autoStartAt={p.autoStartAt}
         onCancelAutoStart={p.onCancelAutoStart}
       />

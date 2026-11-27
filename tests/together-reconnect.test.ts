@@ -370,3 +370,18 @@ test("host sample and start times are sent in relay time", () => {
   assert.equal(sent.sampledAt, 105000);
   assert.equal(sent.playAt, 106000);
 });
+
+test("a guest that reconnects after a crash no longer counts as buffering", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  h.joined();
+  const socket = h.sockets[0];
+  socket.message({ t: "participant-joined", participant: { id: "guest", name: "Guest" } });
+  socket.message({ t: "participant-status", clientId: "guest", phase: "buffering" });
+  assert.equal(h.client.getSnapshot().participantStatus.guest, "buffering");
+  socket.message({ t: "participant-joined", participant: { id: "guest", name: "Guest" } });
+  assert.equal(h.client.getSnapshot().participantStatus.guest, undefined);
+  socket.message({ t: "participant-status", clientId: "guest", phase: "buffering" });
+  socket.message({ t: "participant-left", clientId: "guest" });
+  assert.equal(h.client.getSnapshot().participantStatus.guest, undefined);
+});

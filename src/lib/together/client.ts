@@ -3,6 +3,7 @@ import {
   WT_PROTO,
   type ClientMessage,
   type Participant,
+  type ParticipantSyncPhase,
   type ParticipantLocation,
   type PlayInvite,
   type RoomCode,
@@ -114,6 +115,8 @@ export class TogetherClient {
       started: false,
       relayVersion: null,
       lastError: null,
+      participantStatus: {},
+      hostAway: false,
     };
   }
 
@@ -227,6 +230,8 @@ export class TogetherClient {
       lastError: null,
       started: false,
       relayVersion: null,
+      participantStatus: {},
+      hostAway: false,
     });
     this.openSocket();
   }
@@ -260,6 +265,8 @@ export class TogetherClient {
       relayVersion: null,
       listenSessionId: undefined,
       lastError: null,
+      participantStatus: {},
+      hostAway: false,
     });
   }
 
@@ -376,6 +383,11 @@ export class TogetherClient {
       return;
     }
     this.sendNow({ t: "cmd", room: this.room, clientId: this.clientId, command });
+  }
+
+  sendStatus(phase: ParticipantSyncPhase): void {
+    if (!this.room || this.ws?.readyState !== WebSocket.OPEN) return;
+    this.sendNow({ t: "status", room: this.room, clientId: this.clientId, phase });
   }
 
   /** Converts the app's local sample and start times to relay time for the wire. */
@@ -605,6 +617,8 @@ export class TogetherClient {
           hostClientId: msg.hostClientId,
           started: msg.started ?? false,
           relayVersion: typeof msg.relayVersion === "number" ? msg.relayVersion : null,
+          participantStatus: { ...msg.statuses },
+          hostAway: msg.hostAway === true,
         });
         this.reconcileHostClaim(msg.hostClientId);
         if (msg.state) {
@@ -638,7 +652,7 @@ export class TogetherClient {
         }
         return;
       case "host":
-        this.update({ hostClientId: msg.hostClientId });
+        this.update({ hostClientId: msg.hostClientId, hostAway: false });
         this.reconcileHostClaim(msg.hostClientId);
         return;
       case "started":
@@ -660,7 +674,15 @@ export class TogetherClient {
         ) {
           return;
         }
-        this.update({ participants: nextParticipants });
+        // A (re)joining connection has reported nothing yet; a stale "buffering"
+        // from a crashed connection must not keep the room waiting.
+        const participantStatus = { ...this.snapshot.participantStatus };
+        delete participantStatus[incoming.id];
+        this.update({
+          participants: nextParticipants,
+          participantStatus,
+          ...(incoming.id === this.snapshot.hostClientId && { hostAway: false }),
+        });
         if (incoming.id !== this.clientId && this.room && this.ws?.readyState === WebSocket.OPEN) {
           this.sendNow({
             t: "profile",
@@ -697,11 +719,23 @@ export class TogetherClient {
           avatar: left?.avatar ?? null,
           color: left?.color ?? null,
         });
+        const participantStatus = { ...this.snapshot.participantStatus };
+        delete participantStatus[msg.clientId];
         this.update({
           participants: this.snapshot.participants.filter((p) => p.id !== msg.clientId),
+          participantStatus,
         });
         return;
       }
+      case "participant-status":
+        if (msg.phase !== "ready" && msg.phase !== "buffering") return;
+        this.update({
+          participantStatus: { ...this.snapshot.participantStatus, [msg.clientId]: msg.phase },
+        });
+        return;
+      case "host-away":
+        if (msg.clientId === this.snapshot.hostClientId) this.update({ hostAway: true });
+        return;
       case "participant-ready":
         this.update({
           participants: this.snapshot.participants.map((p) =>

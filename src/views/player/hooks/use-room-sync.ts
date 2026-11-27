@@ -3,7 +3,13 @@ import type { PlayerBridge, PlayerSnapshot } from "@/lib/player/bridge";
 import { getPlaybackBuffered, getPlaybackPosition } from "@/lib/player/playback-clock";
 import type { PartialSyncState } from "@/lib/together/provider";
 import type { RoomSnapshot } from "@/lib/together/client";
-import { type RoomCommand, type SourceDescriptor, type SyncState } from "@/lib/together/protocol";
+import {
+  RELAY_SYNC_STATUS_VERSION,
+  type ParticipantSyncPhase,
+  type RoomCommand,
+  type SourceDescriptor,
+  type SyncState,
+} from "@/lib/together/protocol";
 import {
   STALL_MAX_MOVE_S,
   anchorFromState,
@@ -37,6 +43,10 @@ const PAUSE_SNAP_S = 0.1;
 const RESUME_SEEK_S = 1;
 /** After a corrective seek the playback clock needs time to settle before the next decision. */
 const SEEK_SETTLE_MS = 1500;
+/** A guest reports buffering to the room only after waiting this long. */
+const BUFFERING_REPORT_MS = 1000;
+/** A guest that reported buffering is ready again once this much is buffered. */
+const READY_BUFFER_S = 2;
 
 function syncTarget(state: SyncState, duration: number): number {
   const age = Math.min(SYNC_MAX_AGE_S, Math.max(0, (Date.now() - state.updatedAt) / 1000));
@@ -86,6 +96,7 @@ export function useRoomSync(params: {
   onIncomingState: (cb: (state: SyncState) => void) => () => void;
   onIncomingCommand: (cb: (from: string, command: RoomCommand) => void) => () => void;
   markReady: (ready: boolean) => void;
+  sendStatus?: (phase: ParticipantSyncPhase) => void;
   suppressOutgoingFor: (ms: number) => void;
   setForeignNotice: (n: ForeignNotice | null) => void;
   cast?: {
@@ -114,15 +125,18 @@ export function useRoomSync(params: {
     onIncomingState,
     onIncomingCommand,
     markReady,
+    sendStatus,
     suppressOutgoingFor,
     setForeignNotice,
     cast,
   } = params;
 
-  const { startTogether, countdownAt } = useRoomHostSync({
+  const { startTogether, waitingFor, skipWaiting, countdownAt } = useRoomHostSync({
     inRoom,
     isHost,
     hasStarted,
+    roomSnapshot,
+    clientId,
     src,
     snap,
     bridgeRef,
@@ -139,6 +153,8 @@ export function useRoomSync(params: {
   isHostRef.current = isHost;
   const roomStartedRef = useRef(roomSnapshot.started);
   roomStartedRef.current = roomSnapshot.started;
+  const hostAwayRef = useRef(roomSnapshot.hostAway);
+  hostAwayRef.current = roomSnapshot.hostAway;
   const syncCatchUpRef = useRef(false);
   const lastAppliedStateAtRef = useRef(0);
   const anchorRef = useRef<TimelineAnchor | null>(null);
@@ -340,7 +356,8 @@ export function useRoomSync(params: {
       const anchor = anchorRef.current;
       const b = bridgeRef.current;
       if (!anchor || !b || scheduledPlayRef.current != null) return;
-      if (!anchor.playing || statusRef.current !== "playing") {
+      // With the host gone the last anchor goes stale; never chase it.
+      if (hostAwayRef.current || !anchor.playing || statusRef.current !== "playing") {
         setSyncFactor(1);
         return;
       }
@@ -358,6 +375,40 @@ export function useRoomSync(params: {
       setSyncFactor(1);
     };
   }, [inRoom, isHost, hasStarted, mediaKey, cast]);
+
+  // Tell the room when this guest is stuck buffering, so the host can wait (relay v12+).
+  const statusSupported = (roomSnapshot.relayVersion ?? 0) >= RELAY_SYNC_STATUS_VERSION;
+  useEffect(() => {
+    if (!inRoom || isHost || !hasStarted || !statusSupported || !sendStatus) return;
+    let sent: ParticipantSyncPhase | null = null;
+    let bufferingSince: number | null = null;
+    const tick = () => {
+      if (cast?.activeRef.current) return;
+      const now = Date.now();
+      let next = sent;
+      if (bufferingRef.current && statusRef.current === "playing") {
+        bufferingSince ??= now;
+        if (now - bufferingSince >= BUFFERING_REPORT_MS) next = "buffering";
+      } else {
+        bufferingSince = null;
+        if (sent === "buffering") {
+          const live = getPlaybackPosition();
+          const buffered = getPlaybackBuffered();
+          const nearEof = durationRef.current > 0 && live + buffered >= durationRef.current - 0.5;
+          if (buffered >= READY_BUFFER_S || nearEof) next = "ready";
+        }
+      }
+      if (next && next !== sent) {
+        sent = next;
+        sendStatus(next);
+      }
+    };
+    const id = window.setInterval(tick, GUEST_CORRECTION_TICK_MS);
+    return () => {
+      window.clearInterval(id);
+      if (sent === "buffering") sendStatus("ready");
+    };
+  }, [inRoom, isHost, hasStarted, statusSupported, sendStatus, mediaKey, cast]);
 
   useEffect(() => {
     if (!inRoom || !cast) return;
@@ -467,5 +518,7 @@ export function useRoomSync(params: {
     // The host's own countdown, or the guest's.
     syncNotice:
       isHost && countdownAt != null ? { kind: "countdown" as const, at: countdownAt } : notice,
+    waitingFor,
+    skipWaiting,
   };
 }

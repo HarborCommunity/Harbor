@@ -45,6 +45,7 @@ export const RoomLayer = memo(function RoomLayer({
   foreignNotice,
   onDismissForeign,
   syncNotice,
+  onKeepWatching,
   autoStartAt,
   onCancelAutoStart,
 }: {
@@ -82,6 +83,7 @@ export const RoomLayer = memo(function RoomLayer({
   foreignNotice: { title: string | null; from: string } | null;
   onDismissForeign: () => void;
   syncNotice: RoomSyncPillNotice | null;
+  onKeepWatching?: () => void;
   autoStartAt: number | null;
   onCancelAutoStart: () => void;
 }) {
@@ -136,7 +138,9 @@ export const RoomLayer = memo(function RoomLayer({
         />
       )}
 
-      {inRoom && !showWaiting && !pipMode && syncNotice && <RoomSyncPill notice={syncNotice} />}
+      {inRoom && !showWaiting && !pipMode && syncNotice && (
+        <RoomSyncPill notice={syncNotice} onKeepWatching={onKeepWatching} />
+      )}
 
       {!pipMode && !drawMode && (
         <DurationMismatchChip

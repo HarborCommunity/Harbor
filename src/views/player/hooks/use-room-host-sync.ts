@@ -2,7 +2,12 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import type { PlayerBridge, PlayerSnapshot } from "@/lib/player/bridge";
 import { getPlaybackPosition } from "@/lib/player/playback-clock";
 import type { PartialSyncState } from "@/lib/together/provider";
-import type { RoomCommand, SourceDescriptor } from "@/lib/together/protocol";
+import type { RoomSnapshot } from "@/lib/together/client";
+import {
+  RELAY_SYNC_STATUS_VERSION,
+  type RoomCommand,
+  type SourceDescriptor,
+} from "@/lib/together/protocol";
 import { anchorChange, expectedPosition, type PublishedAnchor } from "@/lib/together/timeline";
 import type { PlayerSrc } from "@/lib/view";
 import { HOST_HEARTBEAT_MS, SEEK_APPLY_DEBOUNCE_MS } from "../player-utils";
@@ -13,7 +18,13 @@ const PUBLISH_TICK_MS = 250;
 const SEEK_SETTLE_MS = 300;
 /** Countdown before a synchronized start, long enough for every viewer to receive it. */
 export const START_COUNTDOWN_MS = 1500;
+/** Countdown before resuming after the room waited for a buffering guest. */
+const RESUME_COUNTDOWN_MS = 600;
+/** A guest still buffering after this long no longer holds up the room. */
+const GUEST_WAIT_MAX_MS = 15_000;
 const CAST_PUBLISH_MS = 1000;
+/** mpv can still report "playing" briefly after the room-wait pause. */
+const WAIT_PAUSE_SETTLE_MS = 1500;
 
 type CastSync = {
   activeRef: RefObject<boolean>;
@@ -27,13 +38,16 @@ type CastSync = {
 /**
  * The host's half of the watch party: it owns the shared timeline. It
  * publishes a new anchor whenever playback changes (play, pause, buffering,
- * speed, or a seek from any source) plus a heartbeat, and applies guest
- * requests.
+ * speed, or a seek from any source) plus a heartbeat, applies guest requests,
+ * and, on relays that report guest status, pauses the room while a guest
+ * buffers and resumes everyone together.
  */
 export function useRoomHostSync(params: {
   inRoom: boolean;
   isHost: boolean;
   hasStarted: boolean;
+  roomSnapshot: RoomSnapshot;
+  clientId: string;
   src: PlayerSrc;
   snap: PlayerSnapshot;
   bridgeRef: RefObject<PlayerBridge | null>;
@@ -44,6 +58,8 @@ export function useRoomHostSync(params: {
   cast?: CastSync;
 }): {
   startTogether: () => void;
+  waitingFor: string[];
+  skipWaiting: () => void;
   /** When the host's own scheduled start happens, so the host sees the countdown too. */
   countdownAt: number | null;
 } {
@@ -51,6 +67,8 @@ export function useRoomHostSync(params: {
     inRoom,
     isHost,
     hasStarted,
+    roomSnapshot,
+    clientId,
     src,
     snap,
     bridgeRef,
@@ -289,6 +307,119 @@ export function useRoomHostSync(params: {
     return off;
   }, [inRoom, isHost, onIncomingCommand, bridgeRef, cast]);
 
+  // Room-wide wait (relay v12+) for guests stuck buffering.
+  type WaitState = {
+    paused: boolean;
+    pausedAt: number;
+    since: Map<string, number>;
+    skipped: Set<string>;
+  };
+  const freshWait = (): WaitState => ({
+    paused: false,
+    pausedAt: 0,
+    since: new Map(),
+    skipped: new Set(),
+  });
+  const waitRef = useRef<WaitState>(freshWait());
+  const [waitingFor, setWaitingFor] = useState<string[]>([]);
+  const waitingForRef = useRef<string[]>([]);
+  const showWaiting = (ids: string[]) => {
+    if (ids.join("|") === waitingForRef.current.join("|")) return;
+    waitingForRef.current = ids;
+    setWaitingFor(ids);
+  };
+  const statusesRef = useRef(roomSnapshot.participantStatus);
+  statusesRef.current = roomSnapshot.participantStatus;
+  const participantsRef = useRef(roomSnapshot.participants);
+  participantsRef.current = roomSnapshot.participants;
+
+  const resumeAfterWait = () => {
+    const wait = waitRef.current;
+    if (!wait.paused) return;
+    wait.paused = false;
+    showWaiting([]);
+    scheduleSyncedPlay(Math.max(0, getPlaybackPosition()), RESUME_COUNTDOWN_MS);
+  };
+
+  const waitTickRef = useRef<() => void>(() => {});
+  waitTickRef.current = () => {
+    const wait = waitRef.current;
+    const b = bridgeRef.current;
+    if (!b || cast?.activeRef.current) return;
+    const now = Date.now();
+    const byId = new Map(participantsRef.current.map((p) => [p.id, p]));
+    const limits = new Map<string, number>();
+    for (const [id, phase] of Object.entries(statusesRef.current ?? {})) {
+      const p = byId.get(id);
+      if (phase === "buffering" && id !== clientId && p) limits.set(id, GUEST_WAIT_MAX_MS);
+    }
+    // Guests that left, rejoined or recovered start over: a later stall waits again.
+    for (const id of wait.since.keys()) if (!limits.has(id)) wait.since.delete(id);
+    for (const id of wait.skipped) if (!limits.has(id)) wait.skipped.delete(id);
+    const holding: string[] = [];
+    for (const [id, limit] of limits) {
+      if (!wait.since.has(id)) wait.since.set(id, now);
+      if (now - (wait.since.get(id) ?? now) > limit) wait.skipped.add(id);
+      if (!wait.skipped.has(id)) holding.push(id);
+    }
+    if (
+      wait.paused &&
+      statusRef.current === "playing" &&
+      pendingPlayAtRef.current == null &&
+      now - wait.pausedAt > WAIT_PAUSE_SETTLE_MS
+    ) {
+      // The host pressed play during the wait: stop waiting for these guests.
+      for (const id of holding) wait.skipped.add(id);
+      wait.paused = false;
+      showWaiting([]);
+      return;
+    }
+    if (holding.length > 0) {
+      if (!wait.paused && statusRef.current === "playing") {
+        wait.paused = true;
+        wait.pausedAt = now;
+        cancelScheduledPlay();
+        b.pause("room-wait");
+      }
+      showWaiting(wait.paused ? holding : []);
+      return;
+    }
+    resumeAfterWait();
+  };
+
+  /** "Keep watching": stop waiting for everyone the room is holding for right now. */
+  const skipWaiting = useCallback(() => {
+    const wait = waitRef.current;
+    for (const id of wait.since.keys()) wait.skipped.add(id);
+    resumeAfterWait();
+  }, []);
+
+  const statusSupported = (roomSnapshot.relayVersion ?? 0) >= RELAY_SYNC_STATUS_VERSION;
+  useEffect(() => {
+    if (!inRoom || !isHost || !hasStarted || !statusSupported) {
+      // The room paused this player for a guest; with the room gone, nobody resumes it.
+      if (waitRef.current.paused && pendingPlayAtRef.current == null)
+        bridgeRef.current?.play({ reason: "room-wait" }).catch(() => {});
+      waitRef.current = freshWait();
+      showWaiting([]);
+      return;
+    }
+    waitTickRef.current();
+    const id = window.setInterval(() => waitTickRef.current(), 1000);
+    return () => window.clearInterval(id);
+  }, [inRoom, isHost, hasStarted, statusSupported, mediaKey]);
+  useEffect(() => {
+    if (!inRoom || !isHost || !hasStarted || !statusSupported) return;
+    waitTickRef.current();
+  }, [
+    inRoom,
+    isHost,
+    hasStarted,
+    statusSupported,
+    roomSnapshot.participantStatus,
+    roomSnapshot.participants,
+  ]);
+
   // While casting, the cast device is the host's clock.
   useEffect(() => {
     if (!inRoom || !isHost || !cast) return;
@@ -329,5 +460,5 @@ export function useRoomHostSync(params: {
     });
   }, [inRoom, isHost, hasStarted, snap.durationSec, publishState, mediaKey]);
 
-  return { startTogether, countdownAt };
+  return { startTogether, waitingFor, skipWaiting, countdownAt };
 }

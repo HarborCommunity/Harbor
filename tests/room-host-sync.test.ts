@@ -4,7 +4,7 @@ import test from "node:test";
 import ts from "typescript";
 import * as timeline from "../src/lib/together/timeline.ts";
 
-function harness() {
+function harness(options: { relayVersion?: number } = {}) {
   let now = 100_000;
   let position = 50;
   const refs: any[] = [];
@@ -36,6 +36,8 @@ function harness() {
         { id: "host", name: "Host" },
         { id: "guest", name: "Guest" },
       ],
+      participantStatus: {},
+      relayVersion: options.relayVersion ?? 11,
     },
     clientId: "host",
     src: { url: "fixture", meta: { id: "tt100", name: "Fixture" }, episode: null },
@@ -68,6 +70,7 @@ function harness() {
       },
     },
     "@/lib/player/playback-clock": { getPlaybackPosition: () => position },
+    "@/lib/together/protocol": { RELAY_SYNC_STATUS_VERSION: 12 },
     "@/lib/together/timeline": timeline,
     "../player-utils": { HOST_HEARTBEAT_MS: 1000, SEEK_APPLY_DEBOUNCE_MS: 120 },
   };
@@ -123,6 +126,7 @@ function harness() {
     render,
     advance,
     start: () => result.startTogether(),
+    skip: () => result.skipWaiting(),
     position: (n: number) => {
       position = n;
     },
@@ -192,4 +196,92 @@ test("start schedules the host and the room for the same instant", () => {
   assert.equal(h.published.length, 1);
   h.advance(100);
   assert.ok(h.calls.includes("play"));
+});
+
+test("a buffering guest pauses the room and everyone resumes together", () => {
+  const h = harness({ relayVersion: 12 });
+  h.render();
+  h.params.roomSnapshot = {
+    ...h.params.roomSnapshot,
+    participantStatus: { guest: "buffering" },
+  };
+  h.render();
+  assert.ok(h.calls.includes("pause"));
+  h.params.snap = { ...h.params.snap, status: "paused" };
+  h.render();
+  h.params.roomSnapshot = { ...h.params.roomSnapshot, participantStatus: { guest: "ready" } };
+  h.render();
+  const resume = h.published.at(-1);
+  assert.equal(resume.playing, true);
+  assert.equal(resume.playAt, h.now() + 600);
+  h.advance(600);
+  assert.ok(h.calls.includes("play"));
+});
+
+test("older relays never pause the room for guests", () => {
+  const h = harness({ relayVersion: 11 });
+  h.render();
+  h.params.roomSnapshot = {
+    ...h.params.roomSnapshot,
+    participantStatus: { guest: "buffering" },
+  };
+  h.render();
+  assert.ok(!h.calls.includes("pause"));
+});
+
+const bufferingGuest = (h: ReturnType<typeof harness>) => {
+  h.params.roomSnapshot = { ...h.params.roomSnapshot, participantStatus: { guest: "buffering" } };
+  h.render();
+  h.params.snap = { ...h.params.snap, status: "paused" };
+  h.render();
+};
+
+test("a buffering guest that leaves releases the room at once", () => {
+  const h = harness({ relayVersion: 12 });
+  h.params.roomSnapshot.participants.push({ id: "third", name: "Third" });
+  h.render();
+  bufferingGuest(h);
+  h.params.roomSnapshot = {
+    ...h.params.roomSnapshot,
+    participants: h.params.roomSnapshot.participants.filter((p: any) => p.id !== "guest"),
+    participantStatus: {},
+  };
+  h.render();
+  assert.equal(h.published.at(-1).playAt, h.now() + 600);
+  h.advance(600);
+  assert.ok(h.calls.includes("play"));
+});
+
+test("the host resumes on its own when the only waiting guest leaves the room", () => {
+  const h = harness({ relayVersion: 12 });
+  h.render();
+  bufferingGuest(h);
+  h.params.inRoom = false;
+  h.render();
+  assert.ok(h.calls.includes("play"));
+});
+
+test("a crashed guest stops holding the room after the wait limit", () => {
+  const h = harness({ relayVersion: 12 });
+  h.render();
+  bufferingGuest(h);
+  h.advance(15_000);
+  assert.ok(!h.calls.includes("play"));
+  h.advance(1000);
+  h.advance(600);
+  assert.ok(h.calls.includes("play"));
+});
+
+test("a guest skipped earlier is waited for again after it recovers", () => {
+  const h = harness({ relayVersion: 12 });
+  h.render();
+  bufferingGuest(h);
+  h.advance(16_600);
+  h.params.snap = { ...h.params.snap, status: "playing" };
+  h.params.roomSnapshot = { ...h.params.roomSnapshot, participantStatus: { guest: "ready" } };
+  h.render();
+  h.calls.length = 0;
+  h.params.roomSnapshot = { ...h.params.roomSnapshot, participantStatus: { guest: "buffering" } };
+  h.render();
+  assert.ok(h.calls.includes("pause"));
 });

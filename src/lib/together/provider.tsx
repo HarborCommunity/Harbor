@@ -43,6 +43,7 @@ import {
   generateRoomCode,
   normalizeRoomCode,
   type ParticipantLocation,
+  type ParticipantSyncPhase,
   type PlayInvite,
   type RoomCommand,
   type SummonTarget,
@@ -103,6 +104,8 @@ type TogetherValue = {
   hostLocation: ParticipantLocation | null;
   suppressOutgoingFor: (ms: number) => void;
   onIncomingState: (cb: (state: SyncState) => void) => () => void;
+  /** Reports this viewer's watch-party sync phase to the room (relay v12+). */
+  sendStatus: (phase: ParticipantSyncPhase) => void;
   /** The media key playing in this window, or null; see TogetherClient.setActivePlayback. */
   setActivePlayback: (key: string | null) => void;
   modalOpen: boolean;
@@ -193,6 +196,8 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
     started: false,
     relayVersion: null,
     lastError: null,
+    participantStatus: {},
+    hostAway: false,
   });
   const activePlaybackRef = useRef<string | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
@@ -466,6 +471,10 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const sendStatus = useCallback((phase: ParticipantSyncPhase) => {
+    clientRef.current?.sendStatus(phase);
+  }, []);
+
   const setActivePlayback = useCallback((key: string | null) => {
     activePlaybackRef.current = key;
     clientRef.current?.setActivePlayback(key);
@@ -518,6 +527,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       hostLocation,
       suppressOutgoingFor,
       onIncomingState,
+      sendStatus,
       setActivePlayback,
       modalOpen,
       modalOwner,
@@ -569,6 +579,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       hostLocation,
       suppressOutgoingFor,
       onIncomingState,
+      sendStatus,
       setActivePlayback,
       modalOpen,
       modalOwner,

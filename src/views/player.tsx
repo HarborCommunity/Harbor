@@ -208,6 +208,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     participantLocations,
     startRoom,
     hostSource,
+    sendStatus,
     setActivePlayback,
   } = useTogether();
   const stageRef = useRef<HTMLDivElement>(null);
@@ -822,7 +823,15 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     !liveOverlay.isLive &&
     settings.playerEngine !== "auto";
 
-  const { inRoomRef, isHostRef, initialSyncDoneRef, startTogether, syncNotice } = useRoomSync({
+  const {
+    inRoomRef,
+    isHostRef,
+    initialSyncDoneRef,
+    startTogether,
+    syncNotice,
+    waitingFor,
+    skipWaiting,
+  } = useRoomSync({
     inRoom,
     isHost,
     hasStarted,
@@ -839,6 +848,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     onIncomingState,
     onIncomingCommand,
     markReady,
+    sendStatus,
     suppressOutgoingFor,
     setForeignNotice,
     cast: cast.sync,
@@ -864,12 +874,40 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     mediaKey: `${src.meta.id}|${src.episode?.season ?? ""}|${src.episode?.episode ?? ""}`,
   });
 
-  const roomSyncNotice = useMemo<RoomSyncPillNotice | null>(() => {
-    if (!inRoom || !hasStarted || !syncNotice) return null;
-    if (syncNotice.kind === "countdown") return syncNotice;
-    const host = roomSnapshot.participants.find((p) => p.id === roomSnapshot.hostClientId);
-    return { kind: "host-buffering", host: host?.name ?? t("Host") };
-  }, [inRoom, hasStarted, syncNotice, roomSnapshot.participants, roomSnapshot.hostClientId, t]);
+  const roomSyncNotice = useMemo<{
+    notice: RoomSyncPillNotice;
+    onKeepWatching?: () => void;
+  } | null>(() => {
+    if (!inRoom || !hasStarted) return null;
+    if (syncNotice?.kind === "countdown") return { notice: syncNotice };
+    const people = roomSnapshot.participants;
+    const nameOf = (id: string | null) => people.find((p) => p.id === id)?.name ?? t("Host");
+    if (isHost) {
+      if (waitingFor.length === 0) return null;
+      return {
+        notice: { kind: "waiting", names: waitingFor.map(nameOf) },
+        onKeepWatching: skipWaiting,
+      };
+    }
+    if (syncNotice?.kind === "host-buffering")
+      return { notice: { kind: "host-buffering", host: nameOf(roomSnapshot.hostClientId) } };
+    const loading = people
+      .filter((p) => p.id !== clientId && roomSnapshot.participantStatus[p.id] === "buffering")
+      .map((p) => p.name);
+    return loading.length > 0 ? { notice: { kind: "waiting", names: loading } } : null;
+  }, [
+    inRoom,
+    hasStarted,
+    isHost,
+    clientId,
+    syncNotice,
+    waitingFor,
+    skipWaiting,
+    roomSnapshot.participants,
+    roomSnapshot.participantStatus,
+    roomSnapshot.hostClientId,
+    t,
+  ]);
 
   const { rememberSubChoice, cycleSubtitles, playPauseToggle, seekStep, seekTo } =
     usePlaybackControls({
@@ -1599,7 +1637,8 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     guestEscapeReady: lobby.guestEscapeReady,
     autoStartAt: lobby.autoStartAt,
     onCancelAutoStart: lobby.cancelAutoStart,
-    syncNotice: roomSyncNotice,
+    syncNotice: roomSyncNotice?.notice ?? null,
+    onKeepWatching: roomSyncNotice?.onKeepWatching,
     onStart: lobby.startHost,
     onPlayWithoutSync: lobby.playWithoutSync,
     guestHostSource,
