@@ -64,12 +64,18 @@ function srcInfo(src: PlayerSrc): ScrobbleInfo {
 }
 
 export function useSimklScrobble({
-  src, snap, liveScrobble = { phase: "off", proof: null },
-}: { src: PlayerSrc; snap: Snap; liveScrobble?: LiveScrobbleResolution }): void {
+  src,
+  snap,
+  liveScrobble = { phase: "off", proof: null },
+}: {
+  src: PlayerSrc;
+  snap: Snap;
+  liveScrobble?: LiveScrobbleResolution;
+}): void {
   const { isConnected } = useSimkl();
   const { settings } = useSettings();
-  const enabled = isConnected && settings.simklScrobbleEnabled &&
-    liveScrobble.phase !== "resolving";
+  const enabled =
+    isConnected && settings.simklScrobbleEnabled && liveScrobble.phase !== "resolving";
   const verifiedOnly = liveScrobble.proof != null;
   const lastActionRef = useRef<LastAction>(null);
   const lastKeyRef = useRef<string | null>(null);
@@ -91,14 +97,22 @@ export function useSimklScrobble({
   const episodeKey = `${metaId}|${season ?? ""}|${episode ?? ""}`;
   // The native proof is a session dimension even when catalog coordinates
   // stay unchanged. Close the previous owner before opening another one.
-  const proofKey = liveScrobble.phase === "resolving" ? "resolving"
-    : liveScrobble.proof
-      ? `${liveScrobble.proof.work.entryId}:${liveScrobble.proof.work.entryEpisode}`
-      : liveScrobble.phase;
+  const proofKey =
+    liveScrobble.phase === "resolving"
+      ? "resolving"
+      : liveScrobble.proof
+        ? `${liveScrobble.proof.work.entryId}:${liveScrobble.proof.work.entryEpisode}`
+        : liveScrobble.phase;
   const key = `${episodeKey}|${proofKey}`;
   const prevEpisodeKeyRef = useRef(episodeKey);
 
-  const stopArgsRef = useRef({ metaId, episode: src.episode, snap, info: infoRef.current, verifiedOnly });
+  const stopArgsRef = useRef({
+    metaId,
+    episode: src.episode,
+    snap,
+    info: infoRef.current,
+    verifiedOnly,
+  });
   stopArgsRef.current = { metaId, episode: src.episode, snap, info: infoRef.current, verifiedOnly };
 
   useEffect(() => {
@@ -129,14 +143,24 @@ export function useSimklScrobble({
       if (prev.enabled && lastActionRef.current !== "stop") {
         if (prevProgress >= WATCHED_MARK_PCT) {
           sendBeacon(prev.metaId, prev.episode, 100, "stop", prev.info);
-          void recordWatchedFallback(
-            prev.metaId, prev.episode, prev.info, prev.verifiedOnly,
-          ).then((ok) => {
-            if (!ok) queueWatch(prev.metaId, prev.episode, prev.info, prev.verifiedOnly);
-          });
-        } else if (prevProgress > 0 || lastActionRef.current === "start" ||
-                   lastActionRef.current === "pause") {
-          void simklScrobble("pause", prev.metaId, prev.episode, prevProgress, prev.info, prev.verifiedOnly);
+          void recordWatchedFallback(prev.metaId, prev.episode, prev.info, prev.verifiedOnly).then(
+            (ok) => {
+              if (!ok) queueWatch(prev.metaId, prev.episode, prev.info, prev.verifiedOnly);
+            },
+          );
+        } else if (
+          prevProgress > 0 ||
+          lastActionRef.current === "start" ||
+          lastActionRef.current === "pause"
+        ) {
+          void simklScrobble(
+            "pause",
+            prev.metaId,
+            prev.episode,
+            prevProgress,
+            prev.info,
+            prev.verifiedOnly,
+          );
         }
       }
       lastActionRef.current = null;
@@ -146,7 +170,13 @@ export function useSimklScrobble({
     }
     lastKeyRef.current = key;
     prevEpisodeKeyRef.current = episodeKey;
-    prevIdentityRef.current = { metaId, episode: src.episode, info: infoRef.current, verifiedOnly, enabled };
+    prevIdentityRef.current = {
+      metaId,
+      episode: src.episode,
+      info: infoRef.current,
+      verifiedOnly,
+      enabled,
+    };
   }, [enabled, key, episodeKey, metaId, src.episode]);
 
   useEffect(() => {
@@ -171,7 +201,8 @@ export function useSimklScrobble({
             if (!ok) queueWatch(metaId, ep, info, verifiedOnly);
           });
         }
-        lastActionRef.current = "stop";
+        // A truncated end is reloaded in place (same key), so it must not lock out the real end.
+        lastActionRef.current = endPct >= WATCHED_MARK_PCT ? "stop" : null;
       }
       return;
     }
