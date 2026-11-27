@@ -971,6 +971,13 @@ const coverage: Record<string, string> = {
   "{name} resumed": "{name} devam ettirdi",
   "{name} skipped to {time}": "{name} {time} anına atladı",
   "{name} skipped": "{name} atladı",
+  React: "Tepki ver",
+  Reactions: "Tepkiler",
+  " · loading": " · yükleniyor",
+  " · {n}s behind": " · {n} sn geride",
+  " · {n}s ahead": " · {n} sn önde",
+  "−{n}s": "−{n} sn",
+  "+{n}s": "+{n} sn",
 };
 
 export default coverage;

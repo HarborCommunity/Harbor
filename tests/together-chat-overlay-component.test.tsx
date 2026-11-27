@@ -183,3 +183,44 @@ test("the reaction row sends one tap each, closes with Escape/Back and stays hid
   assert.equal(dismiss.dismissChatHistory(), false);
   ui.unmount();
 });
+
+test("Space and the arrows on the reaction row stay in the row instead of reaching the player", () => {
+  const sent: string[] = [];
+  const ui = setup(false, older);
+  ui.rerender({ onReact: (e: string) => sent.push(e) });
+  const playerKeys: string[] = [];
+  const onWindowKey = (e: KeyboardEvent) => playerKeys.push(e.key);
+  ui.doc.defaultView!.addEventListener("keydown", onWindowKey);
+  try {
+    act(() => ui.doc.querySelector<HTMLButtonElement>('[aria-label="React"]')!.click());
+    const row = [...ui.doc.querySelectorAll("button")].filter((b) =>
+      protocol.REACTION_EMOJI.includes(b.getAttribute("aria-label") as never),
+    );
+    const press = (key: string) =>
+      act(() => {
+        (ui.doc.activeElement as HTMLElement).dispatchEvent(
+          new ui.doc.defaultView!.KeyboardEvent("keydown", {
+            key,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      });
+    row[0].focus();
+    press("ArrowRight");
+    assert.equal(ui.doc.activeElement, row[1]);
+    press("End");
+    assert.equal(ui.doc.activeElement, row.at(-1));
+    press("ArrowRight");
+    assert.equal(ui.doc.activeElement, row.at(-1), "the last one stays put");
+    press("Home");
+    assert.equal(ui.doc.activeElement, row[0]);
+    press(" ");
+    assert.deepEqual(playerKeys, [], "the player never saw Space or the arrows");
+    press("t");
+    assert.deepEqual(playerKeys, ["t"], "other keys still reach the player");
+  } finally {
+    ui.doc.defaultView!.removeEventListener("keydown", onWindowKey);
+    ui.unmount();
+  }
+});

@@ -1187,6 +1187,13 @@ const coverage: Record<string, string> = {
   "{name} resumed": "{name} a repris la lecture",
   "{name} skipped to {time}": "{name} est passé à {time}",
   "{name} skipped": "{name} a sauté un passage",
+  React: "Réagir",
+  Reactions: "Réactions",
+  " · loading": " · chargement",
+  " · {n}s behind": " · {n} s de retard",
+  " · {n}s ahead": " · {n} s d'avance",
+  "−{n}s": "−{n} s",
+  "+{n}s": "+{n} s",
 };
 
 export default coverage;

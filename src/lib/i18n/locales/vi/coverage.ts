@@ -704,6 +704,13 @@ const coverage: Record<string, string> = {
   "{name} resumed": "{name} đã tiếp tục phát",
   "{name} skipped to {time}": "{name} đã tua đến {time}",
   "{name} skipped": "{name} đã tua",
+  React: "Bày tỏ cảm xúc",
+  Reactions: "Cảm xúc",
+  " · loading": " · đang tải",
+  " · {n}s behind": " · chậm {n} giây",
+  " · {n}s ahead": " · nhanh {n} giây",
+  "−{n}s": "−{n} giây",
+  "+{n}s": "+{n} giây",
 };
 
 export default coverage;

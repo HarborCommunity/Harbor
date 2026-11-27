@@ -247,6 +247,27 @@ export function ChatOverlay({
             <div
               role="group"
               aria-label={t("Reactions")}
+              onKeyDown={(e) => {
+                // The player's window shortcuts own Space and the arrows; inside the row
+                // Space reacts with the focused button and the arrows move between them.
+                if (![" ", "ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+                e.stopPropagation();
+                // TV spatial navigation (a capture listener) may already have moved focus.
+                if (e.key === " " || e.defaultPrevented) return;
+                e.preventDefault();
+                const buttons = [...e.currentTarget.querySelectorAll("button")];
+                const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+                const last = buttons.length - 1;
+                const next =
+                  e.key === "Home"
+                    ? 0
+                    : e.key === "End"
+                      ? last
+                      : e.key === "ArrowLeft"
+                        ? Math.max(0, at - 1)
+                        : Math.min(last, at + 1);
+                buttons[next]?.focus();
+              }}
               className="flex items-center gap-0.5 rounded-full border border-white/12 bg-black/55 px-1 py-0.5 backdrop-blur-md animate-popover-in"
             >
               {REACTION_EMOJI.map((emoji, i) => (

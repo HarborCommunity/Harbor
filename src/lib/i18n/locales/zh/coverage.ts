@@ -920,6 +920,13 @@ const coverage: Record<string, string> = {
   "{name} resumed": "{name} 继续了播放",
   "{name} skipped to {time}": "{name} 跳转到了 {time}",
   "{name} skipped": "{name} 跳过了一段",
+  React: "回应",
+  Reactions: "表情回应",
+  " · loading": " · 加载中",
+  " · {n}s behind": " · 落后 {n} 秒",
+  " · {n}s ahead": " · 领先 {n} 秒",
+  "−{n}s": "−{n}秒",
+  "+{n}s": "+{n}秒",
 };
 
 export default coverage;

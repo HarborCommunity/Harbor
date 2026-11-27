@@ -11,6 +11,7 @@ import type {
   SourceDescriptor,
   SyncState,
 } from "@/lib/together/protocol";
+import { reactionSide } from "@/lib/together/reactions";
 import type { FloatingReaction } from "./hooks/use-floating-reactions";
 import { DurationMismatchChip } from "./duration-mismatch-chip";
 import { ForeignNoticeBox } from "./foreign-notice-box";
@@ -145,7 +146,9 @@ export const RoomLayer = memo(function RoomLayer({
         />
       )}
 
-      {inRoom && !pipMode && <ReactionLayer reactions={reactions} />}
+      {inRoom && !pipMode && (
+        <ReactionLayer reactions={reactions} side={reactionSide(chatCorner)} />
+      )}
 
       {showWaiting && (
         <WaitingForRoom

@@ -812,6 +812,13 @@ const coverage: Record<string, string> = {
   "{name} resumed": "{name} melanjutkan",
   "{name} skipped to {time}": "{name} melompat ke {time}",
   "{name} skipped": "{name} melompat",
+  React: "Beri reaksi",
+  Reactions: "Reaksi",
+  " · loading": " · memuat",
+  " · {n}s behind": " · tertinggal {n} dtk",
+  " · {n}s ahead": " · lebih cepat {n} dtk",
+  "−{n}s": "−{n} dtk",
+  "+{n}s": "+{n} dtk",
 };
 
 export default coverage;

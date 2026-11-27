@@ -1538,6 +1538,13 @@ const coverage: Record<string, string> = {
   "{name} resumed": "{name} ने फिर से चलाया",
   "{name} skipped to {time}": "{name} {time} पर गए",
   "{name} skipped": "{name} ने स्किप किया",
+  React: "प्रतिक्रिया दें",
+  Reactions: "प्रतिक्रियाएँ",
+  " · loading": " · लोड हो रहा है",
+  " · {n}s behind": " · {n} से. पीछे",
+  " · {n}s ahead": " · {n} से. आगे",
+  "−{n}s": "−{n} से.",
+  "+{n}s": "+{n} से.",
 };
 
 export default coverage;

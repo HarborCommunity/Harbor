@@ -3696,6 +3696,8 @@ const uiFallback: Record<string, string> = {
   " · loading": " · loading",
   " · {n}s behind": " · {n}s behind",
   " · {n}s ahead": " · {n}s ahead",
+  "−{n}s": "−{n}s",
+  "+{n}s": "+{n}s",
 };
 
 export default uiFallback;

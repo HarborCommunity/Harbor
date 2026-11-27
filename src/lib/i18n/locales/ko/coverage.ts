@@ -739,6 +739,13 @@ const coverage: Record<string, string> = {
   "{name} resumed": "{name} 님이 다시 재생했습니다",
   "{name} skipped to {time}": "{name} 님이 {time}(으)로 이동했습니다",
   "{name} skipped": "{name} 님이 건너뛰었습니다",
+  React: "반응하기",
+  Reactions: "반응",
+  " · loading": " · 불러오는 중",
+  " · {n}s behind": " · {n}초 늦음",
+  " · {n}s ahead": " · {n}초 빠름",
+  "−{n}s": "−{n}초",
+  "+{n}s": "+{n}초",
 };
 
 export default coverage;

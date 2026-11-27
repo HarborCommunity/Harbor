@@ -63,6 +63,7 @@ import { setHostMove } from "@/lib/together/host-move";
 import { playbackKey } from "@/lib/together/client";
 import { useRoomActivityNotice } from "./player/hooks/use-room-activity-notice";
 import { useFloatingReactions } from "./player/hooks/use-floating-reactions";
+import { createReactionLimiter } from "@/lib/together/reactions";
 import { RELAY_SOCIAL_VERSION, type ReactionEmoji } from "@/lib/together/protocol";
 import { useHostSource } from "./player/hooks/use-host-source";
 import { useLobbyGate } from "./player/hooks/use-lobby-gate";
@@ -951,8 +952,10 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     enabled: reactionsSupported,
     onReaction,
   });
+  const reactionLimiterRef = useRef(createReactionLimiter());
   const reactToRoom = useCallback(
     (emoji: ReactionEmoji) => {
+      if (!reactionLimiterRef.current()) return;
       sendReaction(emoji);
       addFloatingReaction(emoji, selfName);
     },

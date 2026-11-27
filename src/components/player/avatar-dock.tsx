@@ -193,8 +193,9 @@ function Avatar({
                   : "bg-black/85 text-white/80"
               }`}
             >
-              {health.kind === "behind" ? "−" : "+"}
-              {health.seconds}s
+              {health.kind === "behind"
+                ? t("−{n}s", { n: health.seconds })
+                : t("+{n}s", { n: health.seconds })}
             </span>
           )}
         {isStale && !isPauser && !leftPlayer && (
