@@ -27,8 +27,11 @@ const MAX_RENAME_ATTEMPTS = 8;
 const RENAME_RECONNECT_MS = 60;
 const CONNECT_TIMEOUT_MS = 10_000;
 const MAX_FAIL_STREAK = 4;
+/** A play, pause or seek queued while offline is dropped once older than this. */
+const PENDING_COMMAND_MAX_AGE_MS = 5_000;
 
-function playbackKey(
+/** The key a player and an invite share for "this title, this episode". */
+export function playbackKey(
   mediaId: string,
   episode: { season: number; episode: number } | null | undefined,
 ): string {
@@ -64,7 +67,7 @@ export class TogetherClient {
   private intentional = false;
   private suppressUntil = 0;
   private outQueue: ClientMessage[] = [];
-  private pendingCommand: RoomCommand | null = null;
+  private pendingCommand: { command: RoomCommand; at: number } | null = null;
   private activePlaybackKey: string | null = null;
   private playbackActive = false;
   private lastSentInvite: PlayInvite | null = null;
@@ -181,6 +184,7 @@ export class TogetherClient {
     }
     this.cleanup();
     this.outQueue = [];
+    this.pendingCommand = null;
     this.lastSentInvite = null;
     this.reconnectAttempt = 0;
     this.intentional = false;
@@ -214,6 +218,7 @@ export class TogetherClient {
     this.listenJoin = undefined;
     this.resume = undefined;
     this.outQueue = [];
+    this.pendingCommand = null;
     this.lastSentInvite = null;
     this.claimedHost = false;
     this.update({
@@ -318,8 +323,8 @@ export class TogetherClient {
   sendCommand(command: RoomCommand): void {
     if (!this.room) return;
     if (this.ws?.readyState !== WebSocket.OPEN) {
-      // Only the newest request matters; it is sent as soon as the room is back.
-      this.pendingCommand = command;
+      // Only the newest request matters; it is sent if the room is back soon.
+      this.pendingCommand = { command, at: Date.now() };
       return;
     }
     this.sendNow({ t: "cmd", room: this.room, clientId: this.clientId, command });
@@ -818,10 +823,16 @@ export class TogetherClient {
     const queue = this.outQueue;
     this.outQueue = [];
     for (const m of queue) this.sendNow(m);
-    const command = this.pendingCommand;
+    const pending = this.pendingCommand;
     this.pendingCommand = null;
-    if (command && this.room)
-      this.sendNow({ t: "cmd", room: this.room, clientId: this.clientId, command });
+    // After a long outage the room has moved on; an old seek would drag everyone back.
+    if (pending && this.room && Date.now() - pending.at <= PENDING_COMMAND_MAX_AGE_MS)
+      this.sendNow({
+        t: "cmd",
+        room: this.room,
+        clientId: this.clientId,
+        command: pending.command,
+      });
   }
 
   private handleNameCollision(participants: Participant[]): boolean {

@@ -265,3 +265,51 @@ test("guest commands sent while disconnected go out once the room is back", () =
     [{ action: "pause" }],
   );
 });
+
+test("a command queued while offline never reaches a room joined afterwards", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  h.joined();
+  h.sockets[0].close();
+  h.advance(0);
+  h.client.sendCommand({ action: "pause" });
+  h.client.leave();
+  h.client.join("XYZ789");
+  h.joined();
+  assert.deepEqual(
+    h.sockets.at(-1)!.sent.filter((m) => m.t === "cmd"),
+    [],
+  );
+});
+
+test("a command queued during a long outage is dropped instead of moving the room back", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  h.joined();
+  h.sockets[0].close();
+  h.advance(0);
+  h.client.sendCommand({ action: "seek", positionSeconds: 600 });
+  h.advance(30_000);
+  h.joined();
+  assert.deepEqual(
+    h.sockets.at(-1)!.sent.filter((m) => m.t === "cmd"),
+    [],
+  );
+});
+
+test("while something plays the connection is pinged every 5 s and a silent one dropped within 15 s", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  h.joined();
+  const socket = h.sockets[0];
+  const pings = () => socket.sent.filter((m) => m.t === "ping").length;
+  h.client.setActivePlayback("tt1||");
+  const before = pings();
+  h.advance(10_000);
+  assert.ok(pings() - before >= 2, "about one ping every 5 s");
+  assert.equal(socket.readyState, 1, "12 s of silence have not passed yet");
+  // The check runs on the next 5 s tick after 12 s, so well inside the old 40 s.
+  h.advance(5_000);
+  assert.equal(socket.readyState, 3, "a silent socket is closed and replaced");
+  h.client.setActivePlayback(null);
+});
