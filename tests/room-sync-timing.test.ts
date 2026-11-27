@@ -473,3 +473,23 @@ test("guests ignore host states until the room has started", () => {
   h.emit({ playing: false });
   assert.ok(!h.calls.some((c) => c[0] === "seek"));
 });
+
+test("a guest holds on the current frame when a host that waits for drops goes away", () => {
+  const h = harness();
+  h.params.roomSnapshot = {
+    ...h.params.roomSnapshot,
+    hostAway: true,
+    syncState: h.state({ waitOnDrop: true }),
+  };
+  h.render();
+  assert.ok(h.calls.some((c) => c[0] === "pause"));
+});
+
+test("a guest keeps playing when the host goes away without asking to wait", () => {
+  const h = harness();
+  h.render();
+  h.clear();
+  h.params.roomSnapshot = { ...h.params.roomSnapshot, hostAway: true };
+  h.render();
+  assert.ok(!h.calls.some((c) => c[0] === "pause"));
+});

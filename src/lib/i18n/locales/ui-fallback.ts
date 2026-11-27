@@ -3667,9 +3667,22 @@ const uiFallback: Record<string, string> = {
   "Counts down, then plays for the room": "Counts down, then plays for the room",
   "Starting together in {n}…": "Starting together in {n}…",
   "Waiting for {name} to load…": "Waiting for {name} to load…",
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} lost connection. Waiting for them to come back…",
   "Waiting for {names} to load…": "Waiting for {names} to load…",
   "Starting in {n}… Cancel": "Starting in {n}… Cancel",
+  "When someone drops": "When someone drops",
+  "Keep playing": "Keep playing",
+  "Always wait": "Always wait",
+  "Everyone else carries on": "Everyone else carries on",
+  "Pauses and waits in rooms of up to 3 people": "Pauses and waits in rooms of up to 3 people",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Pauses and waits up to 2 minutes for them to rejoin",
+  "Waiting for {names} to reconnect…": "Waiting for {names} to reconnect…",
+  "Rejoin watch party": "Rejoin watch party",
+  Rejoin: "Rejoin",
   "Keep watching": "Keep watching",
+  "Update your relay to use this": "Update your relay to use this",
 };
 
 export default uiFallback;

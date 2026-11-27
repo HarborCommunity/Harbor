@@ -28,7 +28,7 @@ import {
   SYNC_SEEK_JUMP_S,
   SYNC_SUPPRESS_MS,
 } from "../player-utils";
-import { useRoomHostSync } from "./use-room-host-sync";
+import { useRoomHostSync, type DropPolicy } from "./use-room-host-sync";
 
 type ForeignNotice = { title: string | null; from: string };
 
@@ -97,6 +97,8 @@ export function useRoomSync(params: {
   onIncomingCommand: (cb: (from: string, command: RoomCommand) => void) => () => void;
   markReady: (ready: boolean) => void;
   sendStatus?: (phase: ParticipantSyncPhase) => void;
+  claimHost?: (fresh: boolean) => void;
+  dropPolicy?: DropPolicy;
   suppressOutgoingFor: (ms: number) => void;
   setForeignNotice: (n: ForeignNotice | null) => void;
   cast?: {
@@ -126,11 +128,14 @@ export function useRoomSync(params: {
     onIncomingCommand,
     markReady,
     sendStatus,
+    claimHost,
+    dropPolicy,
     suppressOutgoingFor,
     setForeignNotice,
     cast,
   } = params;
 
+  const skipDroppedRef = useRef(false);
   const { startTogether, waitingFor, skipWaiting, countdownAt } = useRoomHostSync({
     inRoom,
     isHost,
@@ -144,6 +149,8 @@ export function useRoomSync(params: {
     guestPickRef,
     publishState,
     onIncomingCommand,
+    dropPolicy,
+    skipDroppedRef,
     cast,
   });
 
@@ -376,6 +383,20 @@ export function useRoomSync(params: {
     };
   }, [inRoom, isHost, hasStarted, mediaKey, cast]);
 
+  // The host dropped and asked the room to wait for it: hold on the current frame.
+  useEffect(() => {
+    if (!inRoom || isHost || !hasStarted || !roomSnapshot.hostAway) return;
+    if (roomSnapshot.syncState?.waitOnDrop !== true) return;
+    if (statusRef.current === "playing") bridgeRef.current?.pause("room-hold");
+  }, [inRoom, isHost, hasStarted, roomSnapshot.hostAway]);
+
+  /** A guest's "Keep watching" while the host is away: take over and carry on. */
+  const keepWatching = () => {
+    skipDroppedRef.current = true;
+    claimHost?.(false);
+    bridgeRef.current?.play({ reason: "room-hold" }).catch(() => {});
+  };
+
   // Tell the room when this guest is stuck buffering, so the host can wait (relay v12+).
   const statusSupported = (roomSnapshot.relayVersion ?? 0) >= RELAY_SYNC_STATUS_VERSION;
   useEffect(() => {
@@ -520,5 +541,6 @@ export function useRoomSync(params: {
       isHost && countdownAt != null ? { kind: "countdown" as const, at: countdownAt } : notice,
     waitingFor,
     skipWaiting,
+    keepWatching,
   };
 }

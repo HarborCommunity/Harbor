@@ -172,3 +172,67 @@ test("late joiners learn when the stored state was received", async () => {
   const late = join("late");
   assert.equal(typeof late.last("joined").observedAt, "number");
 });
+
+const dropState = (r: any, host: FakeSocket) => r.onMessage(host, stateMsg({ waitOnDrop: true }));
+
+test("by default a dropped guest leaves the room at once", async () => {
+  const { r, join } = await room();
+  const host = join("host");
+  const guest = join("guest");
+  r.onMessage(host, stateMsg());
+  r.onClose(guest);
+  assert.deepEqual(host.last("participant-left")?.clientId, "guest");
+  assert.equal(host.last("participant-away"), undefined);
+});
+
+test("when the host waits for drops, a crashed guest is held as away and can return", async () => {
+  const { r, join } = await room();
+  const host = join("host");
+  const guest = join("guest");
+  dropState(r, host);
+  r.onClose(guest);
+  assert.deepEqual(host.last("participant-away"), { t: "participant-away", clientId: "guest" });
+  assert.equal(host.last("participant-left"), undefined);
+  const late = join("late");
+  const awayEntry = late.last("joined").participants.find((p: any) => p.id === "guest");
+  assert.equal(awayEntry.away, true);
+  join("guest");
+  assert.equal(r.away.size, 0);
+  assert.equal(host.last("participant-joined").participant.id, "guest");
+});
+
+test("an away guest that never returns leaves after the grace period", async () => {
+  const { r, join } = await room();
+  const host = join("host");
+  const guest = join("guest");
+  dropState(r, host);
+  r.onClose(guest);
+  r.away.get("guest").until = Date.now() - 1;
+  await r.alarm();
+  assert.equal(host.last("participant-left").clientId, "guest");
+});
+
+test("a crashed host that waits for drops keeps the role while away", async () => {
+  const { r, join } = await room();
+  const host = join("host");
+  const guest = join("guest");
+  dropState(r, host);
+  r.onClose(host);
+  assert.equal(r.hostClientId, "host");
+  assert.equal(guest.last("participant-away").clientId, "host");
+  const back = join("host");
+  assert.equal(r.hostClientId, "host");
+  assert.equal(back.last("joined").hostAway, false);
+  assert.deepEqual(guest.last("host"), { t: "host", hostClientId: "host" });
+});
+
+test("an away host that never returns hands the role over", async () => {
+  const { r, join } = await room();
+  const host = join("host");
+  join("guest");
+  dropState(r, host);
+  r.onClose(host);
+  r.away.get("host").until = Date.now() - 1;
+  await r.alarm();
+  assert.equal(r.hostClientId, "guest");
+});

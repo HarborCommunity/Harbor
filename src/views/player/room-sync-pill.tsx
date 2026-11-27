@@ -5,7 +5,9 @@ import { formatNames } from "./player-utils";
 export type RoomSyncPillNotice =
   | { kind: "countdown"; at: number }
   | { kind: "host-buffering"; host: string }
-  | { kind: "waiting"; names: string[] };
+  | { kind: "host-away"; host: string }
+  | { kind: "waiting"; names: string[] }
+  | { kind: "reconnect"; names: string[] };
 
 export function useSecondsUntil(at: number | null): number {
   const [now, setNow] = useState(() => Date.now());
@@ -29,7 +31,11 @@ export function RoomSyncPill(props: { notice: RoomSyncPillNotice; onKeepWatching
       ? t("Starting together in {n}…", { n: seconds })
       : notice.kind === "host-buffering"
         ? t("Waiting for {name} to load…", { name: notice.host })
-        : t("Waiting for {names} to load…", { names: formatNames(notice.names, language) });
+        : notice.kind === "host-away"
+          ? t("{name} lost connection. Waiting for them to come back…", { name: notice.host })
+          : notice.kind === "reconnect"
+            ? t("Waiting for {names} to reconnect…", { names: formatNames(notice.names, language) })
+            : t("Waiting for {names} to load…", { names: formatNames(notice.names, language) });
   return (
     <div
       role="status"

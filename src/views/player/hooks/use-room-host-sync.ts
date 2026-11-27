@@ -22,6 +22,12 @@ export const START_COUNTDOWN_MS = 1500;
 const RESUME_COUNTDOWN_MS = 600;
 /** A guest still buffering after this long no longer holds up the room. */
 const GUEST_WAIT_MAX_MS = 15_000;
+/** A dropped guest (relay holds them for 2 minutes) plus time to reload the video. */
+const DROPPED_WAIT_MAX_MS = 150_000;
+/** "Automatic" waits for people who drop only in rooms up to this size. */
+const AUTO_WAIT_MAX_ROOM = 3;
+
+export type DropPolicy = "keep-playing" | "auto" | "always";
 const CAST_PUBLISH_MS = 1000;
 /** mpv can still report "playing" briefly after the room-wait pause. */
 const WAIT_PAUSE_SETTLE_MS = 1500;
@@ -55,6 +61,9 @@ export function useRoomHostSync(params: {
   guestPickRef: RefObject<boolean>;
   publishState: (state: PartialSyncState) => void;
   onIncomingCommand: (cb: (from: string, command: RoomCommand) => void) => () => void;
+  dropPolicy?: DropPolicy;
+  /** Set by a guest who chose "Keep watching" and took over: don't wait for who dropped. */
+  skipDroppedRef?: RefObject<boolean>;
   cast?: CastSync;
 }): {
   startTogether: () => void;
@@ -76,6 +85,8 @@ export function useRoomHostSync(params: {
     guestPickRef,
     publishState,
     onIncomingCommand,
+    dropPolicy = "keep-playing",
+    skipDroppedRef,
     cast,
   } = params;
 
@@ -93,6 +104,13 @@ export function useRoomHostSync(params: {
   rateRef.current = snap.rate;
   const srcRef = useRef(src);
   srcRef.current = src;
+  // Counted with anyone already away, so the room size is the one before the drop.
+  const waitOnDropRef = useRef(false);
+  // Only relay v12 can hold a dropped person, so older relays always keep playing.
+  waitOnDropRef.current =
+    (roomSnapshot.relayVersion ?? 0) >= RELAY_SYNC_STATUS_VERSION &&
+    (dropPolicy === "always" ||
+      (dropPolicy === "auto" && roomSnapshot.participants.length <= AUTO_WAIT_MAX_ROOM));
   const mediaKey = `${src.meta.id}|${src.episode?.season ?? ""}|${src.episode?.episode ?? ""}`;
 
   const lastPublishedRef = useRef<PublishedAnchor | null>(null);
@@ -120,6 +138,7 @@ export function useRoomHostSync(params: {
       posterUrl: s.meta.poster ?? null,
       source: hostSourceRef.current ?? undefined,
       guestPick: guestPickRef.current || undefined,
+      waitOnDrop: waitOnDropRef.current || undefined,
     };
   };
 
@@ -307,7 +326,8 @@ export function useRoomHostSync(params: {
     return off;
   }, [inRoom, isHost, onIncomingCommand, bridgeRef, cast]);
 
-  // Room-wide wait (relay v12+) for guests stuck buffering.
+  // Room-wide wait (relay v12+): for guests stuck buffering, and, when the host
+  // chose to, for guests whose connection dropped until they are back and loaded.
   type WaitState = {
     paused: boolean;
     pausedAt: number;
@@ -315,6 +335,7 @@ export function useRoomHostSync(params: {
     /** Time already spent waiting for each guest on this title, across stalls. */
     spent: Map<string, number>;
     skipped: Set<string>;
+    dropped: Set<string>;
   };
   const freshWait = (): WaitState => ({
     paused: false,
@@ -322,6 +343,7 @@ export function useRoomHostSync(params: {
     since: new Map(),
     spent: new Map(),
     skipped: new Set(),
+    dropped: new Set(),
   });
   const waitRef = useRef<WaitState>(freshWait());
   const [waitingFor, setWaitingFor] = useState<string[]>([]);
@@ -351,10 +373,34 @@ export function useRoomHostSync(params: {
     if (!b || cast?.activeRef.current) return;
     const now = Date.now();
     const byId = new Map(participantsRef.current.map((p) => [p.id, p]));
+    if (skipDroppedRef?.current) {
+      skipDroppedRef.current = false;
+      for (const p of byId.values())
+        if (p.away) {
+          wait.since.set(p.id, now);
+          wait.skipped.add(p.id);
+        }
+    }
     const limits = new Map<string, number>();
     for (const [id, phase] of Object.entries(statusesRef.current ?? {})) {
       const p = byId.get(id);
-      if (phase === "buffering" && id !== clientId && p) limits.set(id, GUEST_WAIT_MAX_MS);
+      if (phase === "buffering" && id !== clientId && p && !p.away)
+        limits.set(id, GUEST_WAIT_MAX_MS);
+    }
+    if (waitOnDropRef.current)
+      for (const p of byId.values())
+        if (p.away && p.id !== clientId) {
+          wait.dropped.add(p.id);
+          limits.set(p.id, DROPPED_WAIT_MAX_MS);
+        }
+    for (const id of wait.dropped) {
+      const p = byId.get(id);
+      if (!p) wait.dropped.delete(id);
+      else if (!p.away) {
+        // Back in the room: wait until their player has loaded the video.
+        if (p.ready) wait.dropped.delete(id);
+        else limits.set(id, DROPPED_WAIT_MAX_MS);
+      }
     }
     // One wait budget per guest per title: a stall that ends adds to it, so a
     // guest who keeps stalling stops pausing everyone. Once skipped (budget
@@ -405,6 +451,7 @@ export function useRoomHostSync(params: {
   const skipWaiting = useCallback(() => {
     const wait = waitRef.current;
     for (const id of wait.since.keys()) wait.skipped.add(id);
+    wait.dropped.clear();
     resumeAfterWait();
   }, []);
 
@@ -472,9 +519,25 @@ export function useRoomHostSync(params: {
     if (!inRoom || !isHost || hasStarted || lobbySeededRef.current) return;
     if (snap.durationSec <= 0) return;
     lobbySeededRef.current = true;
+    // A host back from a crash returns to where it left the room, not to its
+    // last saved resume point.
+    const stored = roomSnapshot.syncState;
+    const s = srcRef.current;
+    let position = getPlaybackPosition();
+    if (
+      roomSnapshot.started &&
+      stored?.updatedBy === clientId &&
+      stored.mediaId === s.meta.id &&
+      (stored.episode?.season ?? null) === (s.episode?.season ?? null) &&
+      (stored.episode?.episode ?? null) === (s.episode?.episode ?? null) &&
+      Math.abs(stored.positionSeconds - position) > 1.5
+    ) {
+      position = stored.positionSeconds;
+      bridgeRef.current?.seek(position);
+    }
     publishState({
       ...baseState(),
-      positionSeconds: getPlaybackPosition(),
+      positionSeconds: position,
       playing: false,
       buffering: false,
       speed: rateRef.current,

@@ -385,3 +385,29 @@ test("a guest that reconnects after a crash no longer counts as buffering", () =
   socket.message({ t: "participant-left", clientId: "guest" });
   assert.equal(h.client.getSnapshot().participantStatus.guest, undefined);
 });
+
+test("a participant whose connection dropped is shown as away", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  const socket = h.sockets.at(-1)!;
+  socket.open();
+  socket.message({
+    t: "joined",
+    participants: [
+      { id: "self", name: "Fixture" },
+      { id: "host", name: "Host", ready: true },
+    ],
+    hostClientId: "host",
+    state: null,
+    started: true,
+    srvAt: 100000,
+  });
+  socket.message({ t: "participant-away", clientId: "host" });
+  const snap = h.client.getSnapshot();
+  assert.equal(snap.participants.find((p: any) => p.id === "host").away, true);
+  assert.equal(snap.hostAway, true);
+  socket.message({ t: "participant-joined", participant: { id: "host", name: "Host" } });
+  const back = h.client.getSnapshot();
+  assert.equal(back.participants.find((p: any) => p.id === "host").away, undefined);
+  assert.equal(back.hostAway, false);
+});

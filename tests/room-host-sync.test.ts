@@ -4,7 +4,7 @@ import test from "node:test";
 import ts from "typescript";
 import * as timeline from "../src/lib/together/timeline.ts";
 
-function harness(options: { relayVersion?: number } = {}) {
+function harness(options: { relayVersion?: number; dropPolicy?: string } = {}) {
   let now = 100_000;
   let position = 50;
   const refs: any[] = [];
@@ -47,6 +47,7 @@ function harness(options: { relayVersion?: number } = {}) {
     guestPickRef: { current: false },
     publishState: (s: any) => published.push(s),
     onIncomingCommand: () => () => {},
+    dropPolicy: options.dropPolicy,
   };
   const mocks: Record<string, any> = {
     react: {
@@ -308,4 +309,69 @@ test("a guest who keeps stalling stops pausing the room once its budget for the 
   status("buffering");
   h.advance(1000);
   assert.ok(h.calls.includes("pause"));
+});
+
+const withGuest = (h: ReturnType<typeof harness>, patch: object) => {
+  h.params.roomSnapshot = {
+    ...h.params.roomSnapshot,
+    participants: [
+      { id: "host", name: "Host" },
+      { id: "guest", name: "Guest", ...patch },
+    ],
+  };
+  h.render();
+};
+
+test("the host announces whether the room waits for people who drop", () => {
+  const keep = harness({ relayVersion: 12, dropPolicy: "keep-playing" });
+  keep.render();
+  assert.equal(keep.published.at(-1).waitOnDrop, undefined);
+  const auto = harness({ relayVersion: 12, dropPolicy: "auto" });
+  auto.render();
+  assert.equal(auto.published.at(-1).waitOnDrop, true);
+  const oldRelay = harness({ relayVersion: 11, dropPolicy: "always" });
+  oldRelay.render();
+  assert.equal(oldRelay.published.at(-1).waitOnDrop, undefined);
+  const big = harness({ relayVersion: 12, dropPolicy: "auto" });
+  for (const id of ["a", "b", "c"]) big.params.roomSnapshot.participants.push({ id, name: id });
+  big.render();
+  assert.equal(big.published.at(-1).waitOnDrop, undefined);
+});
+
+test("by default a dropped guest does not pause the room", () => {
+  const h = harness({ relayVersion: 12 });
+  h.render();
+  withGuest(h, { away: true });
+  assert.ok(!h.calls.includes("pause"));
+});
+
+test("with waiting on, the room pauses for a dropped guest until it is back and loaded", () => {
+  const h = harness({ relayVersion: 12, dropPolicy: "always" });
+  h.render();
+  withGuest(h, { away: true });
+  assert.ok(h.calls.includes("pause"));
+  h.params.snap = { ...h.params.snap, status: "paused" };
+  h.render();
+  withGuest(h, { away: false, ready: false });
+  assert.ok(!h.calls.includes("play"));
+  h.advance(5000);
+  assert.ok(!h.calls.includes("play"));
+  withGuest(h, { away: false, ready: true });
+  assert.equal(h.published.at(-1).playAt, h.now() + 600);
+  h.advance(600);
+  assert.ok(h.calls.includes("play"));
+});
+
+test("keep watching stops waiting for a dropped guest", () => {
+  const h = harness({ relayVersion: 12, dropPolicy: "always" });
+  h.render();
+  withGuest(h, { away: true });
+  h.params.snap = { ...h.params.snap, status: "paused" };
+  h.render();
+  h.skip();
+  h.advance(600);
+  assert.ok(h.calls.includes("play"));
+  h.calls.length = 0;
+  h.advance(5000);
+  assert.ok(!h.calls.includes("pause"));
 });

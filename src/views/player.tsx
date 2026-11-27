@@ -831,6 +831,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     syncNotice,
     waitingFor,
     skipWaiting,
+    keepWatching,
   } = useRoomSync({
     inRoom,
     isHost,
@@ -849,6 +850,8 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     onIncomingCommand,
     markReady,
     sendStatus,
+    claimHost,
+    dropPolicy: settings.togetherDropPolicy,
     suppressOutgoingFor,
     setForeignNotice,
     cast: cast.sync,
@@ -882,17 +885,33 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     if (syncNotice?.kind === "countdown") return { notice: syncNotice };
     const people = roomSnapshot.participants;
     const nameOf = (id: string | null) => people.find((p) => p.id === id)?.name ?? t("Host");
+    // The host's last anchor says whether it waits for people who drop.
+    const roomWaitsOnDrop = roomSnapshot.syncState?.waitOnDrop === true;
     if (isHost) {
       if (waitingFor.length === 0) return null;
+      const names = waitingFor.map(nameOf);
+      const dropped = waitingFor.some((id) => {
+        const p = people.find((q) => q.id === id);
+        return !p || p.away || !p.ready;
+      });
       return {
-        notice: { kind: "waiting", names: waitingFor.map(nameOf) },
+        notice: dropped ? { kind: "reconnect", names } : { kind: "waiting", names },
         onKeepWatching: skipWaiting,
       };
     }
+    if (roomSnapshot.hostAway)
+      return roomWaitsOnDrop
+        ? {
+            notice: { kind: "host-away", host: nameOf(roomSnapshot.hostClientId) },
+            onKeepWatching: keepWatching,
+          }
+        : null;
     if (syncNotice?.kind === "host-buffering")
       return { notice: { kind: "host-buffering", host: nameOf(roomSnapshot.hostClientId) } };
-    // Only while the room actually holds; a skipped guest still loading plays on.
+    // Only while the room actually holds; a skipped guest still loading or away plays on.
     if (roomSnapshot.syncState?.playing !== false) return null;
+    const away = people.filter((p) => p.id !== clientId && p.away).map((p) => p.name);
+    if (roomWaitsOnDrop && away.length > 0) return { notice: { kind: "reconnect", names: away } };
     const loading = people
       .filter((p) => p.id !== clientId && roomSnapshot.participantStatus[p.id] === "buffering")
       .map((p) => p.name);
@@ -905,10 +924,13 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     syncNotice,
     waitingFor,
     skipWaiting,
+    keepWatching,
     roomSnapshot.participants,
     roomSnapshot.participantStatus,
+    roomSnapshot.hostAway,
     roomSnapshot.hostClientId,
     roomSnapshot.syncState?.playing,
+    roomSnapshot.syncState?.waitOnDrop,
     t,
   ]);
 

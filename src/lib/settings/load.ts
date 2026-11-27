@@ -322,6 +322,8 @@ export function parseStoredSettings(raw: string | null): {
       parsed.gameAgeRatingAgency = DEFAULT.gameAgeRatingAgency;
     if (typeof parsed.togetherAutoStart !== "boolean")
       parsed.togetherAutoStart = DEFAULT.togetherAutoStart;
+    if (!["keep-playing", "auto", "always"].includes(parsed.togetherDropPolicy as string))
+      parsed.togetherDropPolicy = DEFAULT.togetherDropPolicy;
     if (parsed.aiSearchProvider !== "groq" && parsed.aiSearchProvider !== "openrouter") {
       parsed.aiSearchProvider = parsed.aiSearchModel
         ? providerTabFor(parsed.aiSearchModel)

@@ -31,6 +31,7 @@ import type {
   RemoteCursor,
 } from "./provider-types";
 import { createCommandSender } from "./seek-coalesce";
+import { clearSavedRoom, loadRecentRoom, saveRoom, type SavedRoom } from "./rejoin";
 import {
   clearInviteParams,
   emitTogetherInvite,
@@ -108,6 +109,10 @@ type TogetherValue = {
   sendStatus: (phase: ParticipantSyncPhase) => void;
   /** The media key playing in this window, or null; see TogetherClient.setActivePlayback. */
   setActivePlayback: (key: string | null) => void;
+  /** A room the previous session was in (after a crash or restart), offered once. */
+  rejoinOffer: SavedRoom | null;
+  acceptRejoin: () => void;
+  dismissRejoin: () => void;
   modalOpen: boolean;
   modalOwner: string | null;
   openModal: (owner: string) => void;
@@ -332,6 +337,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
 
   const leaveSession = useCallback(() => {
     setChat([]);
+    clearSavedRoom();
     clientRef.current?.leave();
   }, []);
 
@@ -471,6 +477,37 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Remember the room on disk while in it; leaving on purpose forgets it.
+  useEffect(() => {
+    if (snapshot.state !== "joined" || !snapshot.room || snapshot.listenSessionId) return;
+    saveRoom(relayUrl, snapshot.room, snapshot.syncState);
+  }, [relayUrl, snapshot.state, snapshot.room, snapshot.listenSessionId, snapshot.syncState]);
+
+  const [rejoinOffer, setRejoinOffer] = useState<SavedRoom | null>(null);
+  const rejoinCheckedRef = useRef(false);
+  useEffect(() => {
+    if (rejoinCheckedRef.current || !relayUrl) return;
+    rejoinCheckedRef.current = true;
+    if (pendingInvite) return;
+    setRejoinOffer(loadRecentRoom(relayUrl));
+  }, [relayUrl, pendingInvite]);
+  useEffect(() => {
+    if (pendingInvite || snapshot.state === "joined") setRejoinOffer(null);
+  }, [pendingInvite, snapshot.state]);
+  const rejoinOfferRef = useRef(rejoinOffer);
+  rejoinOfferRef.current = rejoinOffer;
+  const acceptRejoin = useCallback(() => {
+    const offer = rejoinOfferRef.current;
+    setRejoinOffer(null);
+    if (!offer) return;
+    setChat([]);
+    clientRef.current?.join(offer.room);
+  }, []);
+  const dismissRejoin = useCallback(() => {
+    clearSavedRoom();
+    setRejoinOffer(null);
+  }, []);
+
   const sendStatus = useCallback((phase: ParticipantSyncPhase) => {
     clientRef.current?.sendStatus(phase);
   }, []);
@@ -529,6 +566,9 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       onIncomingState,
       sendStatus,
       setActivePlayback,
+      rejoinOffer,
+      acceptRejoin,
+      dismissRejoin,
       modalOpen,
       modalOwner,
       openModal,
@@ -581,6 +621,9 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       onIncomingState,
       sendStatus,
       setActivePlayback,
+      rejoinOffer,
+      acceptRejoin,
+      dismissRejoin,
       modalOpen,
       modalOwner,
       openModal,

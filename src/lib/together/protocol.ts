@@ -7,6 +7,8 @@ export type Participant = {
   ready: boolean;
   avatar?: string | null;
   color?: string | null;
+  /** Their connection dropped and the room is holding their place (relay v12+). */
+  away?: boolean;
 };
 
 export type EpisodeRef = {
@@ -48,6 +50,8 @@ export type SyncState = {
   sampledAt?: number;
   /** Playback starts at this instant (relay ms on the wire, local ms in the app). */
   playAt?: number;
+  /** The host wants the room to pause and wait for anyone whose connection drops. */
+  waitOnDrop?: boolean;
   updatedAt: number;
   updatedBy: string;
   hostClientId: string | null;
@@ -212,6 +216,7 @@ export type ServerMessage =
       hostAway?: boolean;
     }
   | { t: "participant-status"; clientId: string; phase: ParticipantSyncPhase }
+  | { t: "participant-away"; clientId: string }
   | { t: "host-away"; clientId: string }
   | { t: "participant-joined"; participant: Participant }
   | { t: "participant-left"; clientId: string; name?: string }

@@ -733,6 +733,14 @@ export class TogetherClient {
           participantStatus: { ...this.snapshot.participantStatus, [msg.clientId]: msg.phase },
         });
         return;
+      case "participant-away":
+        this.update({
+          participants: this.snapshot.participants.map((p) =>
+            p.id === msg.clientId ? { ...p, away: true, ready: false } : p,
+          ),
+          ...(msg.clientId === this.snapshot.hostClientId && { hostAway: true }),
+        });
+        return;
       case "host-away":
         if (msg.clientId === this.snapshot.hostClientId) this.update({ hostAway: true });
         return;

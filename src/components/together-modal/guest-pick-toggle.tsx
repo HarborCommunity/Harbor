@@ -1,4 +1,4 @@
-import { ListChecks, PlayCircle, type LucideIcon } from "lucide-react";
+import { ListChecks, PlayCircle, WifiOff, type LucideIcon } from "lucide-react";
 import { useSettings } from "@/lib/settings";
 import { useKnobAnim } from "@/lib/knob-anim";
 import { useT } from "@/lib/i18n";
@@ -65,5 +65,59 @@ export function AutoStartToggle() {
       title={t("Start when everyone is ready")}
       description={t("Counts down, then plays for the room")}
     />
+  );
+}
+
+const DROP_POLICIES = ["keep-playing", "auto", "always"] as const;
+
+/**
+ * What the host's room does when someone's connection drops. Holding a
+ * dropped person needs relay v12; on older relays the room always keeps playing.
+ */
+export function DropPolicySelect(props: { supported: boolean }) {
+  const { settings, update } = useSettings();
+  const t = useT();
+  const current = props.supported ? settings.togetherDropPolicy : "keep-playing";
+  const label = {
+    "keep-playing": t("Keep playing"),
+    auto: t("Automatic"),
+    always: t("Always wait"),
+  };
+  const hint = {
+    "keep-playing": t("Everyone else carries on"),
+    auto: t("Pauses and waits in rooms of up to 3 people"),
+    always: t("Pauses and waits up to 2 minutes for them to rejoin"),
+  };
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg border border-edge px-3 py-2.5 text-[12.5px] text-ink-muted">
+      <span className="flex items-center gap-2">
+        <WifiOff size={13} strokeWidth={1.9} className="shrink-0" />
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate">{t("When someone drops")}</span>
+          <span className="truncate text-[10.5px] text-ink-subtle">
+            {props.supported ? hint[current] : t("Update your relay to use this")}
+          </span>
+        </span>
+      </span>
+      <div role="radiogroup" className="grid grid-cols-3 gap-1">
+        {DROP_POLICIES.map((policy) => (
+          <button
+            key={policy}
+            type="button"
+            role="radio"
+            aria-checked={current === policy}
+            disabled={!props.supported}
+            onClick={() => update({ togetherDropPolicy: policy })}
+            className={`h-7 rounded-md px-1 text-[11.5px] transition-colors ${
+              current === policy
+                ? "bg-accent text-white"
+                : "bg-white/[0.06] hover:bg-white/[0.10] hover:text-ink disabled:opacity-50 disabled:hover:bg-white/[0.06]"
+            }`}
+          >
+            {label[policy]}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
