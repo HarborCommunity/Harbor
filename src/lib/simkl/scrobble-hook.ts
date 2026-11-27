@@ -3,9 +3,9 @@ import type { LiveScrobbleResolution } from "@/lib/identity/use-live-scrobble";
 import { useSimkl } from "./provider";
 import { simklScrobble, buildBody, type ScrobbleInfo } from "./scrobble";
 import { animeIdentity } from "./scrobble-body";
-import { recordPendingWatch } from "./pending-sync";
+import { clearPendingWatch, recordPendingWatch, type PendingEpisodeInput } from "./pending-sync";
 import { recordWatchedFallback } from "./record-watched";
-import { getPlaybackPosition } from "@/lib/player/playback-clock";
+import { getPlaybackPosition, subscribePlaybackClock } from "@/lib/player/playback-clock";
 import { useSettings } from "@/lib/settings";
 import type { PlayerSrc } from "@/lib/view";
 import {
@@ -35,22 +35,24 @@ function queueWatch(
   episode: PlayerSrc["episode"],
   info: ScrobbleInfo | undefined,
   verifiedOnly: boolean,
-): void {
+): { metaId: string; episode: PendingEpisodeInput } | null {
   if (!verifiedOnly) {
     recordPendingWatch(metaId, episode, info?.imdb);
-    return;
+    return { metaId, episode };
   }
   const owner = animeIdentity(episode);
-  if (!owner || !Number.isSafeInteger(owner.number) || owner.number! < 1) return;
+  if (!owner || !Number.isSafeInteger(owner.number) || owner.number! < 1) return null;
   const nativeId = `${owner.scheme}:${owner.id}`;
-  recordPendingWatch(nativeId, {
+  const queued = {
     season: 1,
     episode: owner.number!,
     sourceMetaId: nativeId,
     ...(episode?.kitsuStreamId?.startsWith(`${nativeId}:`)
       ? { kitsuStreamId: episode.kitsuStreamId }
       : {}),
-  });
+  };
+  recordPendingWatch(nativeId, queued);
+  return { metaId: nativeId, episode: queued };
 }
 
 function srcInfo(src: PlayerSrc): ScrobbleInfo {
@@ -64,12 +66,18 @@ function srcInfo(src: PlayerSrc): ScrobbleInfo {
 }
 
 export function useSimklScrobble({
-  src, snap, liveScrobble = { phase: "off", proof: null },
-}: { src: PlayerSrc; snap: Snap; liveScrobble?: LiveScrobbleResolution }): void {
+  src,
+  snap,
+  liveScrobble = { phase: "off", proof: null },
+}: {
+  src: PlayerSrc;
+  snap: Snap;
+  liveScrobble?: LiveScrobbleResolution;
+}): void {
   const { isConnected } = useSimkl();
   const { settings } = useSettings();
-  const enabled = isConnected && settings.simklScrobbleEnabled &&
-    liveScrobble.phase !== "resolving";
+  const enabled =
+    isConnected && settings.simklScrobbleEnabled && liveScrobble.phase !== "resolving";
   const verifiedOnly = liveScrobble.proof != null;
   const lastActionRef = useRef<LastAction>(null);
   const lastKeyRef = useRef<string | null>(null);
@@ -91,14 +99,22 @@ export function useSimklScrobble({
   const episodeKey = `${metaId}|${season ?? ""}|${episode ?? ""}`;
   // The native proof is a session dimension even when catalog coordinates
   // stay unchanged. Close the previous owner before opening another one.
-  const proofKey = liveScrobble.phase === "resolving" ? "resolving"
-    : liveScrobble.proof
-      ? `${liveScrobble.proof.work.entryId}:${liveScrobble.proof.work.entryEpisode}`
-      : liveScrobble.phase;
+  const proofKey =
+    liveScrobble.phase === "resolving"
+      ? "resolving"
+      : liveScrobble.proof
+        ? `${liveScrobble.proof.work.entryId}:${liveScrobble.proof.work.entryEpisode}`
+        : liveScrobble.phase;
   const key = `${episodeKey}|${proofKey}`;
   const prevEpisodeKeyRef = useRef(episodeKey);
 
-  const stopArgsRef = useRef({ metaId, episode: src.episode, snap, info: infoRef.current, verifiedOnly });
+  const stopArgsRef = useRef({
+    metaId,
+    episode: src.episode,
+    snap,
+    info: infoRef.current,
+    verifiedOnly,
+  });
   stopArgsRef.current = { metaId, episode: src.episode, snap, info: infoRef.current, verifiedOnly };
 
   useEffect(() => {
@@ -129,14 +145,24 @@ export function useSimklScrobble({
       if (prev.enabled && lastActionRef.current !== "stop") {
         if (prevProgress >= WATCHED_MARK_PCT) {
           sendBeacon(prev.metaId, prev.episode, 100, "stop", prev.info);
-          void recordWatchedFallback(
-            prev.metaId, prev.episode, prev.info, prev.verifiedOnly,
-          ).then((ok) => {
-            if (!ok) queueWatch(prev.metaId, prev.episode, prev.info, prev.verifiedOnly);
-          });
-        } else if (prevProgress > 0 || lastActionRef.current === "start" ||
-                   lastActionRef.current === "pause") {
-          void simklScrobble("pause", prev.metaId, prev.episode, prevProgress, prev.info, prev.verifiedOnly);
+          void recordWatchedFallback(prev.metaId, prev.episode, prev.info, prev.verifiedOnly).then(
+            (ok) => {
+              if (!ok) queueWatch(prev.metaId, prev.episode, prev.info, prev.verifiedOnly);
+            },
+          );
+        } else if (
+          prevProgress > 0 ||
+          lastActionRef.current === "start" ||
+          lastActionRef.current === "pause"
+        ) {
+          void simklScrobble(
+            "pause",
+            prev.metaId,
+            prev.episode,
+            prevProgress,
+            prev.info,
+            prev.verifiedOnly,
+          );
         }
       }
       lastActionRef.current = null;
@@ -146,7 +172,13 @@ export function useSimklScrobble({
     }
     lastKeyRef.current = key;
     prevEpisodeKeyRef.current = episodeKey;
-    prevIdentityRef.current = { metaId, episode: src.episode, info: infoRef.current, verifiedOnly, enabled };
+    prevIdentityRef.current = {
+      metaId,
+      episode: src.episode,
+      info: infoRef.current,
+      verifiedOnly,
+      enabled,
+    };
   }, [enabled, key, episodeKey, metaId, src.episode]);
 
   useEffect(() => {
@@ -196,12 +228,18 @@ export function useSimklScrobble({
 
   useEffect(() => {
     if (!enabled) return;
-    if (snap.durationSec < STUB_MAX_SEC) return;
-    if (key !== lastKeyRef.current) return;
-    if (lastActionRef.current !== "start" && lastActionRef.current !== "pause") return;
-    const pct = Math.min(100, Math.max(0, (snap.positionSec / snap.durationSec) * 100));
-    if (pct > progressRef.current) progressRef.current = pct;
-  }, [enabled, key, snap.positionSec, snap.durationSec]);
+    const duration = snap.durationSec;
+    if (duration < STUB_MAX_SEC) return;
+    // snap ignores clock-only updates, so follow the live clock to keep progress current.
+    const track = () => {
+      if (key !== lastKeyRef.current) return;
+      if (lastActionRef.current !== "start" && lastActionRef.current !== "pause") return;
+      const pct = Math.min(100, Math.max(0, (getPlaybackPosition() / duration) * 100));
+      if (pct > progressRef.current) progressRef.current = pct;
+    };
+    track();
+    return subscribePlaybackClock(track);
+  }, [enabled, key, snap.durationSec]);
 
   useEffect(() => {
     return () => {
@@ -213,7 +251,11 @@ export function useSimklScrobble({
         const action = progress >= WATCHED_MARK_PCT ? "stop" : "pause";
         sendBeacon(a.metaId, a.episode, action === "stop" ? 100 : progress, action, a.info);
         if (action === "stop") {
-          queueWatch(a.metaId, a.episode, a.info, a.verifiedOnly);
+          // Next and Back keep the app running, so write directly instead of waiting for a queue flush.
+          const queued = queueWatch(a.metaId, a.episode, a.info, a.verifiedOnly);
+          void recordWatchedFallback(a.metaId, a.episode, a.info, a.verifiedOnly).then((ok) => {
+            if (ok && queued) clearPendingWatch(queued.metaId, queued.episode);
+          });
         }
         lastActionRef.current = action;
       } else {
