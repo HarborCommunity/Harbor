@@ -948,7 +948,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     hasStarted,
     participants: roomSnapshot.participants,
     hostClientId: roomSnapshot.hostClientId,
-    hostOnly: roomSnapshot.syncState?.hostOnly === true,
+    hostOnly: roomSnapshot.syncState?.mediaId ? roomSnapshot.syncState.hostOnly === true : null,
     activity: roomActivity,
   });
 

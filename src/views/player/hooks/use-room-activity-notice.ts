@@ -16,7 +16,8 @@ export function useRoomActivityNotice(params: {
   hasStarted: boolean;
   participants: Participant[];
   hostClientId: string | null;
-  hostOnly: boolean;
+  /** Null while the room's state names no media (the host is leaving): not a lock change. */
+  hostOnly: boolean | null;
   activity: RoomActivity | null;
 }): { notice: RoomActivityNoticeInfo | null; showLockedOut: () => void } {
   const { inRoom, isHost, hasStarted, participants, hostClientId, hostOnly, activity } = params;
@@ -57,6 +58,7 @@ export function useRoomActivityNotice(params: {
       lockSeenRef.current = null;
       return;
     }
+    if (hostOnly === null) return;
     const seen = lockSeenRef.current;
     lockSeenRef.current = hostOnly;
     if (seen === hostOnly || (seen === null && !hostOnly)) return;

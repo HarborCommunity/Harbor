@@ -948,6 +948,15 @@ const coverage: Record<string, string> = {
     "Wandelt HDR-Quellen in SDR um. Funktioniert mit eingebetteter Wiedergabe und SDR-Bildschirmen.",
   "Uses mpv's native window and automatic Wayland color management (mpv 0.41 or newer recommended). Requires a compatible GPU driver, compositor and HDR-enabled display. X11 falls back to SDR. Restart playback to apply.":
     "Verwendet das native mpv-Fenster und die automatische Wayland-Farbverwaltung (mpv 0.41 oder neuer empfohlen). Erfordert einen kompatiblen GPU-Treiber, Compositor und einen Bildschirm mit aktiviertem HDR. Unter X11 wird auf SDR zurückgegriffen. Starte die Wiedergabe neu, um die Änderung anzuwenden.",
+  "Only I control playback": "Nur ich steuere die Wiedergabe",
+  "Guests can't play, pause or skip": "Gäste können nicht abspielen, pausieren oder springen",
+  "{name} locked playback": "{name} hat die Wiedergabe gesperrt",
+  "{name} unlocked playback": "{name} hat die Wiedergabe freigegeben",
+  "Only {name} can control playback": "Nur {name} kann die Wiedergabe steuern",
+  "{name} paused": "{name} hat pausiert",
+  "{name} resumed": "{name} hat fortgesetzt",
+  "{name} skipped to {time}": "{name} ist zu {time} gesprungen",
+  "{name} skipped": "{name} ist gesprungen",
 };
 
 export default coverage;
