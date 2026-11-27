@@ -609,6 +609,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     publishState,
   });
 
+  const stayInRoomRef = useRef(false);
   const { closePlayer, onStubEject } = usePlayerExit({
     src: activeMediaSrc,
     season,
@@ -629,13 +630,18 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     clearInvite,
     exitPlayback,
     openPicker,
+    stayInRoomRef,
   });
   closePlayerRef.current = () => void closePlayer();
   // Leaving for another title must go through the same teardown as exiting
   // playback: snapshot, resume, cast, PiP, room and fullscreen, then the picker.
   const playFromEndScreen = useCallback(
     (meta: Parameters<typeof openPicker>[0]) => {
-      void closePlayer().finally(() => openPicker(meta, undefined, { autoPlay: true }));
+      stayInRoomRef.current = true;
+      void closePlayer().finally(() => {
+        stayInRoomRef.current = false;
+        openPicker(meta, undefined, { autoPlay: true });
+      });
     },
     [closePlayer, openPicker],
   );
@@ -644,7 +650,8 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     snap,
     enabled: !docked && !pipMode && !src.pipDocked,
     leadSec: settings.endScreenLeadSec,
-    countdownSec: settings.endScreenCountdownSec,
+    // In a room only the host's choice moves everyone; guests wait for it.
+    countdownSec: inRoom && !isHost ? 0 : settings.endScreenCountdownSec,
     onZero: settings.endScreenOnZero,
     tmdbKey: settings.tmdbKey,
     isLive: isLiveLike,
@@ -848,6 +855,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     roomSnapshot,
     startRoom,
     startTogether,
+    autoStart: settings.togetherAutoStart,
     suppressOutgoingFor,
     bridgeRef,
     initialSyncDoneRef,
@@ -1587,6 +1595,8 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     isHost,
     staleIds: lobby.staleIds,
     guestEscapeReady: lobby.guestEscapeReady,
+    autoStartAt: lobby.autoStartAt,
+    onCancelAutoStart: lobby.cancelAutoStart,
     syncNotice: roomSyncNotice,
     onStart: lobby.startHost,
     onPlayWithoutSync: lobby.playWithoutSync,

@@ -34,6 +34,8 @@ export function usePlayerExit(params: {
   exitPip: () => Promise<void>;
   castActiveRef: RefObject<boolean>;
   stopCast: () => Promise<void>;
+  /** True while the host closes the player to move the room to another title. */
+  stayInRoomRef?: RefObject<boolean>;
   publishState: (state: PartialSyncState) => void;
   notifyHostLeaving: () => void;
   clearInvite: () => void;
@@ -97,7 +99,7 @@ export function usePlayerExit(params: {
     await exitPip();
     if (castActiveRef.current) await stopCast().catch(() => {});
     await exitWindowFullscreenOnPlayerClose();
-    if (inRoom && isHost) {
+    if (inRoom && isHost && !params.stayInRoomRef?.current) {
       publishState({
         mediaId: null,
         mediaTitle: null,

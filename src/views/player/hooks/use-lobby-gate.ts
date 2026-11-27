@@ -3,6 +3,9 @@ import type { PlayerBridge } from "@/lib/player/bridge";
 import type { RoomSnapshot } from "@/lib/together/client";
 import { GUEST_ESCAPE_MS, READY_STALE_MS } from "../player-utils";
 
+/** Countdown the host can cancel before an automatic start. */
+const AUTO_START_MS = 5000;
+
 function sameSet(a: Set<string>, b: Set<string>): boolean {
   if (a.size !== b.size) return false;
   for (const v of a) if (!b.has(v)) return false;
@@ -18,6 +21,7 @@ export function useLobbyGate(params: {
   startRoom: () => void;
   /** Starts the host's playback together with the room (synchronized countdown). */
   startTogether: () => void;
+  autoStart: boolean;
   suppressOutgoingFor: (ms: number) => void;
   bridgeRef: RefObject<PlayerBridge | null>;
   initialSyncDoneRef: RefObject<boolean>;
@@ -27,6 +31,8 @@ export function useLobbyGate(params: {
   playWithoutSync: () => void;
   guestEscapeReady: boolean;
   staleIds: Set<string>;
+  autoStartAt: number | null;
+  cancelAutoStart: () => void;
 } {
   const {
     inRoom,
@@ -36,6 +42,7 @@ export function useLobbyGate(params: {
     roomSnapshot,
     startRoom,
     startTogether,
+    autoStart,
     suppressOutgoingFor,
     bridgeRef,
     initialSyncDoneRef,
@@ -49,6 +56,27 @@ export function useLobbyGate(params: {
     startTogether();
     startRoom();
   }, [setHasStarted, startRoom, startTogether, suppressOutgoingFor]);
+
+  const [autoStartAt, setAutoStartAt] = useState<number | null>(null);
+  const [autoStartCancelled, setAutoStartCancelled] = useState(false);
+  const everyoneReady =
+    roomSnapshot.participants.length > 0 && roomSnapshot.participants.every((p) => p.ready);
+  useEffect(() => {
+    setAutoStartCancelled(false);
+  }, [mediaKey]);
+  useEffect(() => {
+    if (!inRoom || !isHost || hasStarted || !autoStart || autoStartCancelled || !everyoneReady) {
+      setAutoStartAt(null);
+      return;
+    }
+    setAutoStartAt(Date.now() + AUTO_START_MS);
+    const t = window.setTimeout(() => {
+      setAutoStartAt(null);
+      startHost();
+    }, AUTO_START_MS);
+    return () => window.clearTimeout(t);
+  }, [inRoom, isHost, hasStarted, autoStart, autoStartCancelled, everyoneReady, startHost]);
+  const cancelAutoStart = useCallback(() => setAutoStartCancelled(true), []);
 
   useEffect(() => {
     if (!inRoom || !isHost || !hasStarted || roomSnapshot.started) return;
@@ -102,5 +130,5 @@ export function useLobbyGate(params: {
     return () => window.clearInterval(id);
   }, [inRoom, isHost, hasStarted, roomSnapshot.participants]);
 
-  return { startHost, playWithoutSync, guestEscapeReady, staleIds };
+  return { startHost, playWithoutSync, guestEscapeReady, staleIds, autoStartAt, cancelAutoStart };
 }

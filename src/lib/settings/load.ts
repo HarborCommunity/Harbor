@@ -320,6 +320,8 @@ export function parseStoredSettings(raw: string | null): {
       parsed.gameArtworkCoverIcon = DEFAULT.gameArtworkCoverIcon;
     if (parsed.gameAgeRatingAgency !== "ESRB" && parsed.gameAgeRatingAgency !== "PEGI")
       parsed.gameAgeRatingAgency = DEFAULT.gameAgeRatingAgency;
+    if (typeof parsed.togetherAutoStart !== "boolean")
+      parsed.togetherAutoStart = DEFAULT.togetherAutoStart;
     if (parsed.aiSearchProvider !== "groq" && parsed.aiSearchProvider !== "openrouter") {
       parsed.aiSearchProvider = parsed.aiSearchModel
         ? providerTabFor(parsed.aiSearchModel)

@@ -3663,8 +3663,12 @@ const uiFallback: Record<string, string> = {
   "Show episode Jump button": "Show episode Jump button",
   "Show a floating shortcut to jump to an episode in long lists. Automatically hides during playback.":
     "Show a floating shortcut to jump to an episode in long lists. Automatically hides during playback.",
+  "Start when everyone is ready": "Start when everyone is ready",
+  "Counts down 5 seconds, then plays for the room":
+    "Counts down 5 seconds, then plays for the room",
   "Starting together in {n}…": "Starting together in {n}…",
   "Waiting for {name} to load…": "Waiting for {name} to load…",
+  "Starting in {n}… Cancel": "Starting in {n}… Cancel",
 };
 
 export default uiFallback;

@@ -5,7 +5,7 @@ export type RoomSyncPillNotice =
   | { kind: "countdown"; at: number }
   | { kind: "host-buffering"; host: string };
 
-function useSecondsUntil(at: number | null): number {
+export function useSecondsUntil(at: number | null): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (at == null) return;

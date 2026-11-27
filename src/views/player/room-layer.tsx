@@ -45,6 +45,8 @@ export const RoomLayer = memo(function RoomLayer({
   foreignNotice,
   onDismissForeign,
   syncNotice,
+  autoStartAt,
+  onCancelAutoStart,
 }: {
   inRoom: boolean;
   pipMode: boolean;
@@ -80,6 +82,8 @@ export const RoomLayer = memo(function RoomLayer({
   foreignNotice: { title: string | null; from: string } | null;
   onDismissForeign: () => void;
   syncNotice: RoomSyncPillNotice | null;
+  autoStartAt: number | null;
+  onCancelAutoStart: () => void;
 }) {
   const everyoneReady = useMemo(
     () => participants.length > 0 && participants.every((p) => p.ready),
@@ -127,6 +131,8 @@ export const RoomLayer = memo(function RoomLayer({
           onStart={onStart}
           onPlayWithoutSync={onPlayWithoutSync}
           onLeave={onLeave}
+          autoStartAt={autoStartAt}
+          onCancelAutoStart={onCancelAutoStart}
         />
       )}
 
