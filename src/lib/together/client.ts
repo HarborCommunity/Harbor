@@ -241,6 +241,11 @@ export class TogetherClient {
     this.room = null;
     this.listenJoin = undefined;
     this.resume = undefined;
+    // A state held back by a recent sync belongs to this room, not the next one.
+    this.suppressedState = null;
+    if (this.suppressTimer != null) window.clearTimeout(this.suppressTimer);
+    this.suppressTimer = null;
+    this.suppressUntil = 0;
     this.outQueue = [];
     this.pendingCommand = null;
     this.lastSentInvite = null;

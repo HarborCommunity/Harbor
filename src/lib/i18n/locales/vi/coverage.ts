@@ -1,4 +1,6 @@
 const coverage: Record<string, string> = {
+  "Starting together in {n}…": "Cùng bắt đầu sau {n}…",
+  "Waiting for {name} to load…": "Đang chờ {name} tải xong…",
   "Waiting for {name}…": "Đang chờ {name}…",
   "Keeping the source you were watching.": "Giữ nguyên nguồn bạn đang xem.",
   "Sound descriptions": "Mô tả âm thanh",

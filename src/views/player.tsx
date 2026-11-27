@@ -858,8 +858,8 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     if (!inRoom || !hasStarted || !syncNotice) return null;
     if (syncNotice.kind === "countdown") return syncNotice;
     const host = roomSnapshot.participants.find((p) => p.id === roomSnapshot.hostClientId);
-    return { kind: "host-buffering", host: host?.name ?? "Host" };
-  }, [inRoom, hasStarted, syncNotice, roomSnapshot.participants, roomSnapshot.hostClientId]);
+    return { kind: "host-buffering", host: host?.name ?? t("Host") };
+  }, [inRoom, hasStarted, syncNotice, roomSnapshot.participants, roomSnapshot.hostClientId, t]);
 
   const { rememberSubChoice, cycleSubtitles, playPauseToggle, seekStep, seekTo } =
     usePlaybackControls({

@@ -80,9 +80,10 @@ function harness(options: { cast?: boolean; started?: boolean; nudge?: boolean }
         }
       : undefined,
   };
+  const sets: any[] = [];
   const mocks: Record<string, any> = {
     react: {
-      useState: (initial: any) => [initial, () => {}],
+      useState: (initial: any) => [initial, (v: any) => sets.push(v)],
       useRef: (current: any) => refs[refIndex++] ?? (refs[refIndex - 1] = { current }),
       useEffect: (fn: any, deps: any[]) => {
         const index = effectIndex++,
@@ -164,6 +165,7 @@ function harness(options: { cast?: boolean; started?: boolean; nudge?: boolean }
   });
   return {
     params,
+    notices: () => sets.filter((v) => v && typeof v === "object" && "kind" in v),
     calls,
     render,
     state,
@@ -366,8 +368,10 @@ test("a buffering host stops guests once instead of replaying the same second", 
   const h = harness();
   h.render();
   h.position(100.9);
-  h.emit({ positionSeconds: 100, updatedAt: 100_000, buffering: true });
+  // What a current host sends while it waits for data: a stopped timeline.
+  h.emit({ positionSeconds: 100, updatedAt: 100_000, playing: false, buffering: true });
   assert.ok(h.calls.some((c) => c[0] === "pause"));
+  assert.deepEqual(h.notices().at(-1), { kind: "host-buffering" }, "the guest is told why");
   assert.equal(seek(h), 100);
   h.clear();
   h.params.snap.status = "paused";
@@ -375,7 +379,7 @@ test("a buffering host stops guests once instead of replaying the same second", 
   h.position(100);
   for (let i = 0; i < 3; i++) {
     h.advance(1000);
-    h.emit({ positionSeconds: 100, updatedAt: h.now(), buffering: true });
+    h.emit({ positionSeconds: 100, updatedAt: h.now(), playing: false, buffering: true });
   }
   assert.deepEqual(h.calls, []);
 });

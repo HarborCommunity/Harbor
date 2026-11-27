@@ -31,7 +31,7 @@ test("MPV restart from another media path cannot clear the current stall", async
 });
 
 // Execute the bridge's actual snapshot callback with controlled media-element state.
-function html5SnapshotHarness() {
+function html5SnapshotHarness(syncRateFactor = 1) {
   const source = readFileSync(
     new URL("../src/lib/player/html5/bridge.ts", import.meta.url),
     "utf8",
@@ -62,18 +62,43 @@ function html5SnapshotHarness() {
   const run = new Function(
     "video",
     "snap",
+    "syncRateFactor",
     `
     const HTMLMediaElement = { HAVE_FUTURE_DATA: 3, HAVE_CURRENT_DATA: 2 };
     const probeAudio = () => {}, bufferedAhead = () => 0, readHlsAudioTracks = () => null;
     const readAudioTracks = () => [], readCustomSubtitleTracks = () => [];
     const markPlaybackTrace = () => {}, finishPlaybackTrace = () => {}, emit = () => {};
-    const pendingVolume = 1, subDelaySec = 0, mapErrorCode = code => code, syncRateFactor = 1;
+    const pendingVolume = 1, subDelaySec = 0, mapErrorCode = code => code;
     let activeTraceId = null;
     return (${refresh});
   `,
-  )(video, snap);
+  )(video, snap, syncRateFactor);
   return { video, snap, run };
 }
+
+test("MPV's sync nudge changes the real speed but never the speed the user set", async () => {
+  const h = mpvBridgeHarness();
+  await h.bridge.load({ url: "https://media.example/current.mkv" });
+  const speeds = () =>
+    h.commands
+      .filter((c) => c.command === "mpv_set_property" && c.args.name === "speed")
+      .map((c) => c.args.value);
+  h.bridge.setSyncRateFactor(1.05);
+  h.bridge.setRate(1.5);
+  assert.equal(h.snapshot().rate, 1.5);
+  assert.ok(Math.abs(speeds().at(-1) - 1.575) < 1e-9);
+  h.bridge.setSyncRateFactor(1);
+  assert.equal(speeds().at(-1), 1.5);
+  assert.equal(h.snapshot().rate, 1.5);
+  await h.bridge.destroy();
+});
+
+test("HTML5 reports the user's speed while the sync nudge runs", () => {
+  const { video, snap, run } = html5SnapshotHarness(1.05);
+  video.playbackRate = 1.575;
+  run();
+  assert.equal(snap.rate, 1.5);
+});
 
 test("HTML5 stays loading until a frame, then preserves paused state through a stall", () => {
   const h = html5SnapshotHarness();

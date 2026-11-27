@@ -286,7 +286,9 @@ export function useRoomSync(params: {
         return;
       }
       cancelScheduledPlay();
-      showNotice(state.playing && !anchor.playing ? { kind: "host-buffering" } : null);
+      // Current hosts say so (buffering, not playing); older ones keep "playing" but stall.
+      const hostBuffering = state.buffering === true || (state.playing && !anchor.playing);
+      showNotice(hostBuffering ? { kind: "host-buffering" } : null);
 
       const livePos = getPlaybackPosition();
       const playing = statusRef.current === "playing";

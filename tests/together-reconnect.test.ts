@@ -266,6 +266,32 @@ test("guest commands sent while disconnected go out once the room is back", () =
   );
 });
 
+test("a state held back after a sync is not published into the next room", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  h.joined();
+  h.client.suppressOutgoingFor(1400);
+  h.client.publishState({
+    mediaId: "tt1",
+    mediaTitle: "Old room",
+    episode: null,
+    posterUrl: null,
+    positionSeconds: 42,
+    playing: true,
+    updatedAt: 100000,
+    updatedBy: "self",
+    hostClientId: null,
+  });
+  h.client.leave();
+  h.client.join("XYZ789");
+  h.joined();
+  h.advance(2000);
+  assert.deepEqual(
+    h.sockets.at(-1)!.sent.filter((m) => m.t === "state"),
+    [],
+  );
+});
+
 test("a command queued while offline never reaches a room joined afterwards", () => {
   const h = harness();
   h.client.join("ABC123");

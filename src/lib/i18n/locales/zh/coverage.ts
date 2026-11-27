@@ -1,4 +1,6 @@
 const coverage: Record<string, string> = {
+  "Starting together in {n}…": "{n} 秒后一起开始…",
+  "Waiting for {name} to load…": "正在等待 {name} 加载…",
   "Waiting for {name}…": "正在等待 {name}…",
   "Keeping the source you were watching.": "保留你正在观看的来源。",
   "Sound descriptions": "声音描述",
