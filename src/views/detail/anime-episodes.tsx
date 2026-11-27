@@ -846,7 +846,11 @@ export const AnimeEpisodes = memo(function AnimeEpisodes({
     mwVersion,
     settings,
   });
-  const markSeason = (watched: boolean) => routing.markMany(displayEpisodes, watched);
+  const markSeason = (watched: boolean) =>
+    routing.markMany(displayEpisodes, watched, {
+      rows: [...new Set([...episodes, ...displayEpisodes])],
+      isWatched: (ep) => progressFor(ep).watched,
+    });
   // Cours share the season page but not a source entry, so mark the displayed
   // order through the clicked card and write each entry's own watched keys.
   const watchedMenuUpTo = watchedMenu
