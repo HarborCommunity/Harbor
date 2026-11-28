@@ -1,4 +1,23 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} bağlantıyı kaybetti. Dönmesi bekleniyor…",
+  "When someone drops": "Biri düştüğünde",
+  "Keep playing": "Oynatmaya devam et",
+  "Always wait": "Her zaman bekle",
+  "Everyone else carries on": "Diğerleri izlemeye devam eder",
+  "Pauses and waits in rooms of up to 3 people": "En fazla 3 kişilik odalarda duraklatıp bekler",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Duraklatır ve dönmeleri için 2 dakikaya kadar bekler",
+  "Waiting for {names} to reconnect…": "{names} yeniden bağlanana kadar bekleniyor…",
+  "Rejoin watch party": "İzleme partisine yeniden katıl",
+  Rejoin: "Yeniden katıl",
+  "Update your relay to use this": "Bunu kullanmak için aktarıcını güncelle",
+  "Waiting for {names} to load…": "{names} yüklenene kadar bekleniyor…",
+  "Start when everyone is ready": "Herkes hazır olunca başlat",
+  "Counts down, then plays for the room": "Geri sayar, ardından oda için oynatır",
+  "Starting in {n}… Cancel": "{n} içinde başlıyor… İptal",
+  "Starting together in {n}…": "{n} saniye içinde birlikte başlıyor…",
+  "Waiting for {name} to load…": "{name} yüklenene kadar bekleniyor…",
   "Waiting for {name}…": "{name} bekleniyor…",
   "Keeping the source you were watching.": "İzlediğiniz kaynak korunuyor.",
   "Sound descriptions": "Ses açıklamaları",

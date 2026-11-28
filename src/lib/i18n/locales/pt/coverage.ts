@@ -1,4 +1,23 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} perdeu a conexão. Aguardando o retorno…",
+  "When someone drops": "Quando alguém cai",
+  "Keep playing": "Continuar reproduzindo",
+  "Always wait": "Sempre esperar",
+  "Everyone else carries on": "Os outros continuam assistindo",
+  "Pauses and waits in rooms of up to 3 people": "Pausa e espera em salas de até 3 pessoas",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Pausa e espera até 2 minutos pelo retorno",
+  "Waiting for {names} to reconnect…": "Aguardando {names} reconectar…",
+  "Rejoin watch party": "Voltar à sessão",
+  Rejoin: "Voltar",
+  "Update your relay to use this": "Atualize seu relay para usar isto",
+  "Waiting for {names} to load…": "Aguardando {names} carregar…",
+  "Start when everyone is ready": "Começar quando todos estiverem prontos",
+  "Counts down, then plays for the room": "Faz uma contagem regressiva e reproduz para a sala",
+  "Starting in {n}… Cancel": "Começando em {n}… Cancelar",
+  "Starting together in {n}…": "Começando juntos em {n}…",
+  "Waiting for {name} to load…": "Aguardando {name} carregar…",
   "Waiting for {name}…": "Aguardando {name}…",
   "Keeping the source you were watching.": "Mantendo a fonte que você estava assistindo.",
   "Sound descriptions": "Descrições de som",

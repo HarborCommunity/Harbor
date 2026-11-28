@@ -1,4 +1,23 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} terputus. Menunggu dia kembali…",
+  "When someone drops": "Saat seseorang terputus",
+  "Keep playing": "Tetap putar",
+  "Always wait": "Selalu tunggu",
+  "Everyone else carries on": "Yang lain tetap menonton",
+  "Pauses and waits in rooms of up to 3 people": "Menjeda dan menunggu di ruangan hingga 3 orang",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Menjeda dan menunggu hingga 2 menit sampai mereka kembali",
+  "Waiting for {names} to reconnect…": "Menunggu {names} tersambung kembali…",
+  "Rejoin watch party": "Gabung lagi ke nonton bareng",
+  Rejoin: "Gabung lagi",
+  "Update your relay to use this": "Perbarui relay kamu untuk memakai ini",
+  "Waiting for {names} to load…": "Menunggu {names} selesai memuat…",
+  "Start when everyone is ready": "Mulai saat semua siap",
+  "Counts down, then plays for the room": "Menghitung mundur, lalu memutar untuk ruangan",
+  "Starting in {n}… Cancel": "Mulai dalam {n}… Batal",
+  "Starting together in {n}…": "Mulai bersama dalam {n}…",
+  "Waiting for {name} to load…": "Menunggu {name} selesai memuat…",
   "Waiting for {name}…": "Menunggu {name}…",
   "Keeping the source you were watching.": "Mempertahankan sumber yang sedang Anda tonton.",
   "Sound descriptions": "Deskripsi suara",

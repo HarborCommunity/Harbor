@@ -2,6 +2,7 @@ import type { ListenQueue, ListenSuggestion, SongRequestAction } from "@/lib/lis
 import type {
   Participant,
   ParticipantLocation,
+  ParticipantSyncPhase,
   PlayInvite,
   RoomCode,
   RoomCommand,
@@ -20,6 +21,10 @@ export type RoomSnapshot = {
   started: boolean;
   relayVersion: number | null;
   lastError: string | null;
+  /** Latest sync phase each participant reported (relay v12+). */
+  participantStatus: Record<string, ParticipantSyncPhase>;
+  /** The host's connection dropped and the relay is holding its role (relay v12+). */
+  hostAway: boolean;
   listenSessionId?: string;
   allowGuestQueue?: boolean;
   suggestions?: ListenSuggestion[];
