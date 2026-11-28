@@ -203,7 +203,8 @@ export function useSimklScrobble({
             if (!ok) queueWatch(metaId, ep, info, verifiedOnly);
           });
         }
-        lastActionRef.current = "stop";
+        // A truncated end is reloaded in place (same key), so it must not lock out the real end.
+        lastActionRef.current = endPct >= WATCHED_MARK_PCT ? "stop" : null;
       }
       return;
     }
