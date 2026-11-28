@@ -61,6 +61,7 @@ import {
 } from "@/lib/media-server/connections";
 import { synchronizeMediaServer } from "@/lib/media-server/sync";
 import { setNativeMemoryActive } from "@/lib/native-memory";
+import { notifyTrackerStatusChanged } from "@/lib/tracker-status-events";
 import { useOverlayPinned } from "@/lib/overlay-pin";
 import { isMobileWeb, isRemoteRoute } from "@/lib/platform";
 import { makeSafeTauriUnlisten } from "@/lib/tauri-unlisten";
@@ -1578,6 +1579,11 @@ function Shell({ onReady }: { onReady?: () => void }) {
 
   const playerActive = !!player && !player.sportsDocked && !player.pipDocked;
   useEffect(() => setNativeMemoryActive(playerActive), [playerActive]);
+  const previousTopKind = useRef(topKind);
+  useEffect(() => {
+    if (previousTopKind.current === "player" && topKind === "meta") notifyTrackerStatusChanged();
+    previousTopKind.current = topKind;
+  }, [topKind]);
   useEffect(() => {
     if (!playerActive) void exitWindowFullscreenOnPlayerClose();
   }, [playerActive]);

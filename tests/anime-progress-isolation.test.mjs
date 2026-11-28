@@ -321,9 +321,11 @@ test("ordinary series and entry-scoped anime trackers retain existing progress b
   h.watch(IMDB, 1, 1);
   assert.equal(h.query(ordinary).watched, true);
   const empty = harness();
-  for (const provider of ["stremio", "anilist", "simkl", "mal"]) {
+  for (const provider of ["stremio", "anilist", "mal"]) {
     assert.equal(empty.query({ [provider]: new Set(["1:1"]) }).watched, true, provider);
   }
+  assert.equal(empty.query({ simkl: new Set(["1:1"]) }).watched, false, "simkl wrong season");
+  assert.equal(empty.query({ simkl: new Set(["2:1"]) }).watched, true, "simkl canonical season");
   assert.equal(empty.query({ ...ordinary, pmdb: new Set(["1:11"]) }).watched, true);
 });
 

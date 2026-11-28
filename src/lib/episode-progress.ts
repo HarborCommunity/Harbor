@@ -73,8 +73,8 @@ export function getEpisodeProgress(
   anilistWatched?: Set<string>,
   simklWatched?: Set<string>,
   malWatched?: Set<string>,
-  traktSeason?: number,
-  traktEpisode?: number,
+  imdbSeason?: number,
+  imdbEpisode?: number,
   pmdbWatched?: Set<string>,
   absoluteNumber?: number,
   local?: ReturnType<typeof createEpisodeProgressSnapshot>,
@@ -83,15 +83,15 @@ export function getEpisodeProgress(
   const readManual = local?.manualWatchedState ?? manualWatchedState;
   const animeId = /^(kitsu|mal|anilist|anidb):/.test(resumeId);
   const hasMapping =
-    typeof traktSeason === "number" &&
-    Number.isInteger(traktSeason) &&
-    traktSeason >= 0 &&
-    typeof traktEpisode === "number" &&
-    Number.isInteger(traktEpisode) &&
-    traktEpisode > 0;
+    typeof imdbSeason === "number" &&
+    Number.isInteger(imdbSeason) &&
+    imdbSeason >= 0 &&
+    typeof imdbEpisode === "number" &&
+    Number.isInteger(imdbEpisode) &&
+    imdbEpisode > 0;
   const providerCoordinates = !animeId || hasMapping;
-  const canonS = providerCoordinates ? (traktSeason ?? season) : season;
-  const canonE = providerCoordinates ? (traktEpisode ?? episode) : episode;
+  const canonS = providerCoordinates ? (imdbSeason ?? season) : season;
+  const canonE = providerCoordinates ? (imdbEpisode ?? episode) : episode;
   const canonDiffers = canonS !== season || canonE !== episode;
   const imdbAlias = providerCoordinates && traktImdbId !== resumeId ? traktImdbId : null;
   // The primary ID owns the supplied storage coordinates. Only aliases use the mapping.
@@ -131,7 +131,7 @@ export function getEpisodeProgress(
   const traktDone = traktKey ? traktWatched.has(traktKey) : false;
   const stremioDone = stremioWatched ? stremioWatched.has(`${season}:${episode}`) : false;
   const anilistDone = anilistWatched ? anilistWatched.has(`${season}:${episode}`) : false;
-  const simklDone = simklWatched ? simklWatched.has(`${season}:${episode}`) : false;
+  const simklDone = simklWatched ? simklWatched.has(`${canonS}:${canonE}`) : false;
   const malDone = malWatched ? malWatched.has(`${season}:${episode}`) : false;
   const hasAbs =
     (!canonDiffers || pmdbUsesAbsoluteOrder(pmdbWatched)) &&
