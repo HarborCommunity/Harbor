@@ -7,8 +7,8 @@ import {
   setManualWatchedMany,
   type ManualWatchedMeta,
 } from "@/lib/manual-watched";
-import { syncAnimeProgress } from "@/lib/anilist/sync";
-import { syncMalProgress } from "@/lib/mal/sync";
+import { rewindAnimeProgress, syncAnimeProgress } from "@/lib/anilist/sync";
+import { rewindMalProgress, syncMalProgress } from "@/lib/mal/sync";
 import { useSettings } from "@/lib/settings";
 import { isNuvioSignedIn, isNuvioProviderActive } from "@/lib/nuvio/nuvio-client";
 import {
@@ -42,9 +42,25 @@ export function useAnimeWatchedRouting(meta: Meta, franchise: FranchiseEntry[], 
     return { type: "series", name: m.name, poster: m.poster, background: m.background };
   };
 
-  const markMany = (displayEpisodes: KitsuEpisode[], watched: boolean) => {
+  /** Unmarks pass every row and its shown state so tracker progress rewinds to the last row still watched. */
+  const markMany = (
+    displayEpisodes: KitsuEpisode[],
+    watched: boolean,
+    shown?: { rows: KitsuEpisode[]; isWatched: (ep: KitsuEpisode) => boolean },
+  ) => {
     const eligible = watched ? airedOnly(displayEpisodes, (ep) => ep.airdate) : displayEpisodes;
     if (eligible.length === 0) return;
+    const rewindTarget = (id: string): number | null => {
+      const unmarked = eligible.filter((ep) => (ep.sourceMetaId ?? meta.id) === id);
+      const lowest = Math.min(...unmarked.map((ep) => ep.number));
+      if (!shown || !Number.isFinite(lowest)) return null;
+      let target = 0;
+      for (const ep of shown.rows) {
+        if ((ep.sourceMetaId ?? meta.id) !== id || unmarked.includes(ep)) continue;
+        if (ep.number < lowest && ep.number > target && shown.isWatched(ep)) target = ep.number;
+      }
+      return target;
+    };
     const groups = new Map<string, Array<{ season: number; episode: number }>>();
     for (const ep of eligible) {
       const id = ep.sourceMetaId ?? meta.id;
@@ -85,6 +101,13 @@ export function useAnimeWatchedRouting(meta: Meta, franchise: FranchiseEntry[], 
             );
           if (settings.malAutoSync)
             void syncMalProgress(syncId, highest, title, undefined, settings.malCountRewatches);
+        }
+      } else if (!watched && ANIME_TRACK_ID.test(syncId)) {
+        // A tracker count means "watched through N", so it drops to the last episode still watched.
+        const target = rewindTarget(id);
+        if (target != null) {
+          if (settings.anilistAutoSync) void rewindAnimeProgress(syncId, target);
+          if (settings.malAutoSync) void rewindMalProgress(syncId, target);
         }
       }
       if (isNuvioSignedIn() && isNuvioProviderActive() && eps.length > 0) {
