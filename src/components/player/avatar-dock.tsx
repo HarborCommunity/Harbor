@@ -4,6 +4,7 @@ import { nameColor } from "@/lib/together/colors";
 import { useSelfIdentity } from "@/lib/together/use-self-identity";
 import type { PanelCorner } from "@/lib/player-chrome";
 import type { Participant, ParticipantLocation, SyncState } from "@/lib/together/protocol";
+import { whoPaused } from "@/lib/together/who-paused";
 import { useT } from "@/lib/i18n";
 
 const ACTIVE_THRESHOLD_MS = 18_000;
@@ -40,8 +41,7 @@ export function AvatarDock({
 }) {
   if (hidden) return null;
   if (participants.length === 0) return null;
-  const lastPauserId =
-    syncState && !syncState.playing && syncState.updatedBy ? syncState.updatedBy : null;
+  const lastPauserId = whoPaused(syncState);
   const alignRight = corner === "top-right" || corner === "bottom-right";
 
   const attention = participants.some((p) => {

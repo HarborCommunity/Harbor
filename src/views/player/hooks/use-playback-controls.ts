@@ -11,7 +11,7 @@ import {
   type SubChoiceInput,
 } from "@/lib/subtitles/subtitle-memory";
 import { hasImportedSubTitle } from "@/lib/player/imported-subs";
-import type { RoomCommand } from "@/lib/together/protocol";
+import type { PlaybackAction, RoomCommand } from "@/lib/together/protocol";
 import { cacheSelectedSubtitle } from "@/lib/subtitles/selected-subtitle-cache";
 import { notifyMediaSeeked } from "@/lib/media-session";
 import {
@@ -45,6 +45,11 @@ export function usePlaybackControls(params: {
   togglePlayCast: () => Promise<void>;
   seekCast: (sec: number) => Promise<void>;
   sendCommand: (command: RoomCommand) => void;
+  /** The host locked playback: a guest's play, pause and seek do nothing. */
+  controlLocked?: boolean;
+  onControlLocked?: () => void;
+  /** The host played, paused or seeked in a started room. */
+  onRoomAction?: (action: PlaybackAction) => void;
 }) {
   const {
     bridgeRef,
@@ -61,7 +66,12 @@ export function usePlaybackControls(params: {
     togglePlayCast,
     seekCast,
     sendCommand,
+    controlLocked = false,
+    onControlLocked,
+    onRoomAction,
   } = params;
+  const guestLocked = inRoom && !isHost && controlLocked;
+  const hostActs = inRoom && isHost && hasStarted;
 
   const pendingSubtitleCacheRef = useRef<(() => void) | null>(null);
   const subtitleCacheContextRef = useRef({
@@ -210,13 +220,19 @@ export function usePlaybackControls(params: {
       return;
     }
     if (!canControl) return;
+    if (guestLocked) {
+      onControlLocked?.();
+      return;
+    }
     if (inRoom && !isHost) {
       sendCommand(snapRef.current.status === "playing" ? { action: "pause" } : { action: "play" });
       return;
     }
     const b = bridgeRef.current;
     if (!b) return;
-    if (snapRef.current.status === "playing") b.pause("toggle");
+    const pausing = snapRef.current.status === "playing";
+    if (hostActs) onRoomAction?.(pausing ? "pause" : "play");
+    if (pausing) b.pause("toggle");
     else b.play({ reason: "toggle" }).catch(() => {});
   };
 
@@ -245,7 +261,12 @@ export function usePlaybackControls(params: {
       return;
     }
     if (!canControl) return;
+    if (guestLocked) {
+      onControlLocked?.();
+      return;
+    }
     seekAccumRef.current = { target, at: now, clock: observed };
+    if (hostActs) onRoomAction?.("seek");
     if (inRoom && !isHost) {
       sendCommand({ action: "seek", positionSeconds: target });
       return;
@@ -265,7 +286,12 @@ export function usePlaybackControls(params: {
         return;
       }
       if (!canControl) return;
+      if (guestLocked) {
+        onControlLocked?.();
+        return;
+      }
       seekAccumRef.current = { target, at: performance.now(), clock: getPlaybackPosition() };
+      if (hostActs) onRoomAction?.("seek");
       if (inRoom && !isHost) {
         sendCommand({ action: "seek", positionSeconds: target });
         return;
@@ -273,7 +299,19 @@ export function usePlaybackControls(params: {
       bridgeRef.current?.seek(target, "keyframes");
       notifyMediaSeeked(target);
     },
-    [castDevice, canControl, inRoom, isHost, sendCommand, seekCast, bridgeRef],
+    [
+      castDevice,
+      canControl,
+      guestLocked,
+      hostActs,
+      onControlLocked,
+      onRoomAction,
+      inRoom,
+      isHost,
+      sendCommand,
+      seekCast,
+      bridgeRef,
+    ],
   );
 
   return { rememberSubChoice, cycleSubtitles, playPauseToggle, seekStep, seekTo };

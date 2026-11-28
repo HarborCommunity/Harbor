@@ -1,4 +1,23 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} đã mất kết nối. Đang chờ quay lại…",
+  "When someone drops": "Khi có người rớt mạng",
+  "Keep playing": "Tiếp tục phát",
+  "Always wait": "Luôn chờ",
+  "Everyone else carries on": "Mọi người khác vẫn xem tiếp",
+  "Pauses and waits in rooms of up to 3 people": "Tạm dừng và chờ trong phòng tối đa 3 người",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Tạm dừng và chờ tối đa 2 phút để họ quay lại",
+  "Waiting for {names} to reconnect…": "Đang chờ {names} kết nối lại…",
+  "Rejoin watch party": "Tham gia lại buổi xem chung",
+  Rejoin: "Tham gia lại",
+  "Update your relay to use this": "Hãy cập nhật relay để dùng tính năng này",
+  "Waiting for {names} to load…": "Đang chờ {names} tải xong…",
+  "Start when everyone is ready": "Bắt đầu khi mọi người sẵn sàng",
+  "Counts down, then plays for the room": "Đếm ngược rồi phát cho cả phòng",
+  "Starting in {n}… Cancel": "Bắt đầu sau {n}… Hủy",
+  "Starting together in {n}…": "Cùng bắt đầu sau {n}…",
+  "Waiting for {name} to load…": "Đang chờ {name} tải xong…",
   "Waiting for {name}…": "Đang chờ {name}…",
   "Keeping the source you were watching.": "Giữ nguyên nguồn bạn đang xem.",
   "Sound descriptions": "Mô tả âm thanh",
@@ -676,6 +695,15 @@ const coverage: Record<string, string> = {
     "Chuyển đổi nguồn HDR sang SDR. Hoạt động với trình phát nhúng và màn hình SDR.",
   "Uses mpv's native window and automatic Wayland color management (mpv 0.41 or newer recommended). Requires a compatible GPU driver, compositor and HDR-enabled display. X11 falls back to SDR. Restart playback to apply.":
     "Sử dụng cửa sổ gốc của mpv và tính năng quản lý màu tự động của Wayland (khuyến nghị mpv 0.41 trở lên). Cần trình điều khiển GPU và trình tổng hợp tương thích, cùng màn hình đã bật HDR. Trên X11, hệ thống chuyển về SDR. Khởi động lại quá trình phát để áp dụng thay đổi.",
+  "Only I control playback": "Chỉ mình tôi điều khiển phát",
+  "Guests can't play, pause or skip": "Khách không thể phát, tạm dừng hoặc tua",
+  "{name} locked playback": "{name} đã khóa điều khiển phát",
+  "{name} unlocked playback": "{name} đã mở khóa điều khiển phát",
+  "Only {name} can control playback": "Chỉ {name} mới điều khiển được việc phát",
+  "{name} paused": "{name} đã tạm dừng",
+  "{name} resumed": "{name} đã tiếp tục phát",
+  "{name} skipped to {time}": "{name} đã tua đến {time}",
+  "{name} skipped": "{name} đã tua",
 };
 
 export default coverage;

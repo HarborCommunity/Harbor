@@ -1,4 +1,24 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} a perdu la connexion. En attente de son retour…",
+  "When someone drops": "Quand quelqu'un se déconnecte",
+  "Keep playing": "Continuer la lecture",
+  "Always wait": "Toujours attendre",
+  "Everyone else carries on": "Les autres continuent de regarder",
+  "Pauses and waits in rooms of up to 3 people":
+    "Met en pause et attend dans les salons de 3 personnes maximum",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Met en pause et attend jusqu'à 2 minutes son retour",
+  "Waiting for {names} to reconnect…": "En attente de la reconnexion de {names}…",
+  "Rejoin watch party": "Rejoindre la séance",
+  Rejoin: "Rejoindre",
+  "Update your relay to use this": "Mettez à jour votre relais pour utiliser cette option",
+  "Waiting for {names} to load…": "En attente du chargement de {names}…",
+  "Start when everyone is ready": "Démarrer quand tout le monde est prêt",
+  "Counts down, then plays for the room": "Compte à rebours, puis lecture pour le salon",
+  "Starting in {n}… Cancel": "Début dans {n}… Annuler",
+  "Starting together in {n}…": "Départ ensemble dans {n}…",
+  "Waiting for {name} to load…": "En attente du chargement de {name}…",
   "Waiting for {name}…": "En attente de {name}…",
   "Keeping the source you were watching.": "Conservation de la source que vous regardiez.",
   "Sound descriptions": "Descriptions sonores",
@@ -1157,6 +1177,16 @@ const coverage: Record<string, string> = {
     "Convertit les sources HDR en SDR. Compatible avec la lecture intégrée et les écrans SDR.",
   "Uses mpv's native window and automatic Wayland color management (mpv 0.41 or newer recommended). Requires a compatible GPU driver, compositor and HDR-enabled display. X11 falls back to SDR. Restart playback to apply.":
     "Utilise la fenêtre native de mpv et la gestion automatique des couleurs de Wayland (mpv 0.41 ou ultérieur recommandé). Nécessite un pilote GPU et un compositeur compatibles, ainsi qu’un écran avec HDR activé. Sous X11, le SDR est utilisé en remplacement. Redémarrez la lecture pour appliquer le changement.",
+  "Only I control playback": "Je suis seul à contrôler la lecture",
+  "Guests can't play, pause or skip":
+    "Les invités ne peuvent ni lire, ni mettre en pause, ni sauter",
+  "{name} locked playback": "{name} a verrouillé la lecture",
+  "{name} unlocked playback": "{name} a déverrouillé la lecture",
+  "Only {name} can control playback": "Seul {name} peut contrôler la lecture",
+  "{name} paused": "{name} a mis en pause",
+  "{name} resumed": "{name} a repris la lecture",
+  "{name} skipped to {time}": "{name} est passé à {time}",
+  "{name} skipped": "{name} a sauté un passage",
 };
 
 export default coverage;

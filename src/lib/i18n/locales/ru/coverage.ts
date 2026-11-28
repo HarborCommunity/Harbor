@@ -1,4 +1,23 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name}: соединение потеряно. Ждём возвращения…",
+  "When someone drops": "Если кто-то отключится",
+  "Keep playing": "Продолжать воспроизведение",
+  "Always wait": "Всегда ждать",
+  "Everyone else carries on": "Остальные продолжают смотреть",
+  "Pauses and waits in rooms of up to 3 people": "Ставит на паузу и ждёт в комнатах до 3 человек",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Ставит на паузу и ждёт возвращения до 2 минут",
+  "Waiting for {names} to reconnect…": "Ждём переподключения: {names}…",
+  "Rejoin watch party": "Вернуться к совместному просмотру",
+  Rejoin: "Вернуться",
+  "Update your relay to use this": "Обновите ретранслятор, чтобы использовать это",
+  "Waiting for {names} to load…": "Ждём загрузки у {names}…",
+  "Start when everyone is ready": "Начать, когда все будут готовы",
+  "Counts down, then plays for the room": "Отсчитывает время и запускает для всей комнаты",
+  "Starting in {n}… Cancel": "Старт через {n}… Отмена",
+  "Starting together in {n}…": "Начинаем вместе через {n}…",
+  "Waiting for {name} to load…": "Ждём, пока {name} загрузится…",
   "Waiting for {name}…": "Ожидание {name}…",
   "Keeping the source you were watching.": "Сохраняем источник, который вы смотрели.",
   "Sound descriptions": "Описания звуков",
@@ -669,6 +688,15 @@ const coverage: Record<string, string> = {
     "Преобразует источники HDR в SDR. Работает со встроенным воспроизведением и SDR-дисплеями.",
   "Uses mpv's native window and automatic Wayland color management (mpv 0.41 or newer recommended). Requires a compatible GPU driver, compositor and HDR-enabled display. X11 falls back to SDR. Restart playback to apply.":
     "Использует собственное окно mpv и автоматическое управление цветом Wayland (рекомендуется mpv 0.41 или новее). Требуются совместимые драйвер GPU, композитор и дисплей с включённым HDR. В X11 используется SDR. Перезапустите воспроизведение, чтобы применить изменение.",
+  "Only I control playback": "Только я управляю воспроизведением",
+  "Guests can't play, pause or skip": "Гости не могут запускать, ставить на паузу или перематывать",
+  "{name} locked playback": "{name}: воспроизведение заблокировано",
+  "{name} unlocked playback": "{name}: воспроизведение разблокировано",
+  "Only {name} can control playback": "Управлять воспроизведением может только {name}",
+  "{name} paused": "{name}: пауза",
+  "{name} resumed": "{name}: продолжено",
+  "{name} skipped to {time}": "{name}: переход к {time}",
+  "{name} skipped": "{name}: перемотка",
 };
 
 export default coverage;

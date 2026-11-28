@@ -1,4 +1,23 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} perdió la conexión. Esperando a que vuelva…",
+  "When someone drops": "Cuando alguien se desconecta",
+  "Keep playing": "Seguir reproduciendo",
+  "Always wait": "Esperar siempre",
+  "Everyone else carries on": "Los demás siguen viendo",
+  "Pauses and waits in rooms of up to 3 people": "Pausa y espera en salas de hasta 3 personas",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Pausa y espera hasta 2 minutos a que vuelvan",
+  "Waiting for {names} to reconnect…": "Esperando a que {names} se reconecten…",
+  "Rejoin watch party": "Volver a la sesión",
+  Rejoin: "Volver a unirse",
+  "Update your relay to use this": "Actualiza tu relay para usar esto",
+  "Waiting for {names} to load…": "Esperando a que {names} carguen…",
+  "Start when everyone is ready": "Empezar cuando todos estén listos",
+  "Counts down, then plays for the room": "Hace una cuenta atrás y luego reproduce para la sala",
+  "Starting in {n}… Cancel": "Empieza en {n}… Cancelar",
+  "Starting together in {n}…": "Empezamos juntos en {n}…",
+  "Waiting for {name} to load…": "Esperando a que {name} cargue…",
   "Waiting for {name}…": "Esperando a {name}…",
   "Keeping the source you were watching.": "Manteniendo la fuente que estabas viendo.",
   "Sound descriptions": "Descripciones de sonido",
@@ -932,6 +951,15 @@ const coverage: Record<string, string> = {
     "Convierte las fuentes HDR a SDR. Funciona con la reproducción integrada y las pantallas SDR.",
   "Uses mpv's native window and automatic Wayland color management (mpv 0.41 or newer recommended). Requires a compatible GPU driver, compositor and HDR-enabled display. X11 falls back to SDR. Restart playback to apply.":
     "Usa la ventana nativa de mpv y la gestión automática del color de Wayland (se recomienda mpv 0.41 o posterior). Requiere un controlador de GPU y un compositor compatibles, y una pantalla con HDR activado. En X11 se utiliza SDR como alternativa. Reinicia la reproducción para aplicar el cambio.",
+  "Only I control playback": "Solo yo controlo la reproducción",
+  "Guests can't play, pause or skip": "Los invitados no pueden reproducir, pausar ni saltar",
+  "{name} locked playback": "{name} bloqueó la reproducción",
+  "{name} unlocked playback": "{name} desbloqueó la reproducción",
+  "Only {name} can control playback": "Solo {name} puede controlar la reproducción",
+  "{name} paused": "{name} pausó",
+  "{name} resumed": "{name} reanudó",
+  "{name} skipped to {time}": "{name} saltó a {time}",
+  "{name} skipped": "{name} saltó",
 };
 
 export default coverage;

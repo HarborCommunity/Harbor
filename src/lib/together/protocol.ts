@@ -7,6 +7,8 @@ export type Participant = {
   ready: boolean;
   avatar?: string | null;
   color?: string | null;
+  /** Their connection dropped and the room is holding their place (relay v12+). */
+  away?: boolean;
 };
 
 export type EpisodeRef = {
@@ -42,10 +44,32 @@ export type SyncState = {
   speed?: number;
   source?: SourceDescriptor;
   guestPick?: boolean;
+  /** The host is waiting for data; the timeline is stopped. Sent by newer hosts. */
+  buffering?: boolean;
+  /** When the host read positionSeconds (relay ms on the wire, local ms in the app). */
+  sampledAt?: number;
+  /** Playback starts at this instant (relay ms on the wire, local ms in the app). */
+  playAt?: number;
+  /** The host wants the room to pause and wait for anyone whose connection drops. */
+  waitOnDrop?: boolean;
+  /** Only the host controls playback; the host ignores guests' play, pause and seek. */
+  hostOnly?: boolean;
+  /** Who made the change this state announces, so everyone can see who paused. */
+  cause?: PlaybackCause;
   updatedAt: number;
   updatedBy: string;
   hostClientId: string | null;
 };
+
+export type PlaybackAction = "play" | "pause" | "seek";
+
+/** A playback change someone made on purpose. `id` grows with each change from one host. */
+export type PlaybackCause = { by: string; action: PlaybackAction; id: number };
+
+/** Relay version that understands participant status and host grace periods. */
+export const RELAY_SYNC_STATUS_VERSION = 12;
+
+export type ParticipantSyncPhase = "ready" | "buffering";
 
 export type RoomCommand =
   | { action: "play" }
@@ -176,6 +200,7 @@ export type ClientMessage =
       activeAt: number;
       location?: ParticipantLocation;
     }
+  | { t: "status"; room: RoomCode; clientId: string; phase: ParticipantSyncPhase }
   | { t: "ping"; room: RoomCode; clientId: string };
 
 export type ServerMessage =
@@ -196,7 +221,12 @@ export type ServerMessage =
       started?: boolean;
       srvAt?: number;
       relayVersion?: number;
+      statuses?: Record<string, ParticipantSyncPhase>;
+      hostAway?: boolean;
     }
+  | { t: "participant-status"; clientId: string; phase: ParticipantSyncPhase }
+  | { t: "participant-away"; clientId: string }
+  | { t: "host-away"; clientId: string }
   | { t: "participant-joined"; participant: Participant }
   | { t: "participant-left"; clientId: string; name?: string }
   | { t: "started"; started: boolean }

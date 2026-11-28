@@ -294,6 +294,8 @@ function normalizeMediaPath(path: string): string {
 export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
   let host: HTMLElement | null = null;
   let snap: PlayerSnapshot = initialPlayerSnapshot();
+  // Watch-party drift correction on top of the user's speed; never shown in snap.rate.
+  let syncRateFactor = 1;
   let profileAf = "";
   let hdrToSdr = mpvOptions?.hdrToSdr ?? true;
   const applyAudioFilters = () => {
@@ -1458,7 +1460,13 @@ export function createMpvBridge(mpvOptions?: MpvOptions): PlayerBridge {
     setRate(r) {
       snap.rate = r;
       emit();
-      invoke("mpv_set_property", { name: "speed", value: r }).catch(() => {});
+      invoke("mpv_set_property", { name: "speed", value: r * syncRateFactor }).catch(() => {});
+    },
+    setSyncRateFactor(factor) {
+      const next = Number.isFinite(factor) && factor > 0 ? factor : 1;
+      if (next === syncRateFactor) return;
+      syncRateFactor = next;
+      invoke("mpv_set_property", { name: "speed", value: snap.rate * next }).catch(() => {});
     },
     setAudioTrack(id) {
       invoke("mpv_set_property", { name: "aid", value: Number(id) || id }).catch(() => {});

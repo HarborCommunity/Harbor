@@ -97,6 +97,8 @@ import { TogetherChatToast } from "@/components/together-chat-toast";
 import { TogetherCursors } from "@/components/together-cursors";
 import { TogetherHostLeavingPrompt } from "@/components/together-host-leaving-prompt";
 import { TogetherInviteToast } from "@/components/together-invite-toast";
+import { TogetherHostMoveGuard } from "@/components/together-host-move-guard";
+import { TogetherRejoinToast } from "@/components/together-rejoin-toast";
 import { TogetherSummonToast } from "@/components/together-summon-toast";
 import { TogetherParticipantLeftToast } from "@/components/together-participant-left-toast";
 import { AnilistSyncToast } from "@/components/anilist/anilist-sync-toast";
@@ -591,6 +593,8 @@ export function App({ onReady }: { onReady?: () => void }) {
                                                         </Suspense>
                                                       )}
                                                       <TogetherInviteToast />
+                                                      <TogetherHostMoveGuard />
+                                                      <TogetherRejoinToast />
                                                       <TogetherFloater />
                                                       <TogetherHostLeavingPrompt />
                                                       <TogetherSummonToast />

@@ -7,6 +7,8 @@ import type { ChatMessage } from "@/lib/together/provider";
 import type { ParticipantLocation, SourceDescriptor, SyncState } from "@/lib/together/protocol";
 import { DurationMismatchChip } from "./duration-mismatch-chip";
 import { ForeignNoticeBox } from "./foreign-notice-box";
+import { RoomActivityNotice, type RoomActivityNoticeInfo } from "./room-activity-notice";
+import { RoomSyncPill, type RoomSyncPillNotice } from "./room-sync-pill";
 import { WaitingForRoom } from "./waiting-for-room";
 
 export const RoomLayer = memo(function RoomLayer({
@@ -43,6 +45,12 @@ export const RoomLayer = memo(function RoomLayer({
   onFindCloser,
   foreignNotice,
   onDismissForeign,
+  syncNotice,
+  onKeepWatching,
+  activityNotice,
+  belowStreamCheck = false,
+  autoStartAt,
+  onCancelAutoStart,
 }: {
   inRoom: boolean;
   pipMode: boolean;
@@ -77,6 +85,13 @@ export const RoomLayer = memo(function RoomLayer({
   onFindCloser: () => void;
   foreignNotice: { title: string | null; from: string } | null;
   onDismissForeign: () => void;
+  syncNotice: RoomSyncPillNotice | null;
+  onKeepWatching?: () => void;
+  activityNotice: RoomActivityNoticeInfo | null;
+  /** The "Does this stream look right?" prompt holds the top centre; sit under it. */
+  belowStreamCheck?: boolean;
+  autoStartAt: number | null;
+  onCancelAutoStart: () => void;
 }) {
   const everyoneReady = useMemo(
     () => participants.length > 0 && participants.every((p) => p.ready),
@@ -124,7 +139,20 @@ export const RoomLayer = memo(function RoomLayer({
           onStart={onStart}
           onPlayWithoutSync={onPlayWithoutSync}
           onLeave={onLeave}
+          autoStartAt={autoStartAt}
+          onCancelAutoStart={onCancelAutoStart}
         />
+      )}
+
+      {inRoom && !showWaiting && !pipMode && (syncNotice || activityNotice) && (
+        <div
+          className={`pointer-events-none absolute left-1/2 z-30 flex max-w-[calc(100%-32px)] -translate-x-1/2 flex-col items-center gap-2 transition-[top] duration-300 ${
+            belowStreamCheck ? "top-28" : "top-20"
+          }`}
+        >
+          {syncNotice && <RoomSyncPill notice={syncNotice} onKeepWatching={onKeepWatching} />}
+          {activityNotice && <RoomActivityNotice notice={activityNotice} />}
+        </div>
       )}
 
       {!pipMode && !drawMode && (

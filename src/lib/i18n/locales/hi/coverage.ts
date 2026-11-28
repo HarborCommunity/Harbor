@@ -1,4 +1,22 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} का कनेक्शन टूट गया। उनके लौटने का इंतज़ार…",
+  "When someone drops": "जब किसी का कनेक्शन टूटे",
+  "Keep playing": "चलाते रहें",
+  "Always wait": "हमेशा इंतज़ार करें",
+  "Everyone else carries on": "बाकी सब देखते रहते हैं",
+  "Pauses and waits in rooms of up to 3 people": "3 लोगों तक के रूम में रोककर इंतज़ार करता है",
+  "Pauses and waits up to 2 minutes for them to rejoin": "रोककर उनके लौटने का 2 मिनट तक इंतज़ार करता है",
+  "Waiting for {names} to reconnect…": "{names} के दोबारा जुड़ने का इंतज़ार…",
+  "Rejoin watch party": "वॉच पार्टी में फिर से जुड़ें",
+  Rejoin: "फिर से जुड़ें",
+  "Update your relay to use this": "इसका इस्तेमाल करने के लिए अपना रिले अपडेट करें",
+  "Waiting for {names} to load…": "{names} के लोड होने का इंतज़ार…",
+  "Start when everyone is ready": "सबके तैयार होने पर शुरू करें",
+  "Counts down, then plays for the room": "उलटी गिनती के बाद रूम के लिए चलाता है",
+  "Starting in {n}… Cancel": "{n} में शुरू… रद्द करें",
+  "Starting together in {n}…": "{n} में साथ शुरू हो रहा है…",
+  "Waiting for {name} to load…": "{name} के लोड होने का इंतज़ार…",
   "Waiting for {name}…": "{name} की प्रतीक्षा की जा रही है…",
   "Keeping the source you were watching.": "वही स्रोत रखा जा रहा है जो आप देख रहे थे।",
   "Sound descriptions": "ध्वनि विवरण",
@@ -1511,6 +1529,15 @@ const coverage: Record<string, string> = {
     "HDR स्रोतों को SDR में बदलता है। एम्बेडेड प्लेबैक और SDR डिस्प्ले के साथ काम करता है।",
   "Uses mpv's native window and automatic Wayland color management (mpv 0.41 or newer recommended). Requires a compatible GPU driver, compositor and HDR-enabled display. X11 falls back to SDR. Restart playback to apply.":
     "mpv की नेटिव विंडो और Wayland के स्वचालित रंग प्रबंधन का उपयोग करता है (mpv 0.41 या नया संस्करण अनुशंसित है)। इसके लिए संगत GPU ड्राइवर, कंपोज़िटर और HDR-सक्षम डिस्प्ले आवश्यक हैं। X11 पर SDR का उपयोग किया जाता है। बदलाव लागू करने के लिए प्लेबैक फिर से शुरू करें।",
+  "Only I control playback": "सिर्फ़ मैं प्लेबैक नियंत्रित करूँ",
+  "Guests can't play, pause or skip": "मेहमान चला, रोक या स्किप नहीं कर सकते",
+  "{name} locked playback": "{name} ने प्लेबैक लॉक किया",
+  "{name} unlocked playback": "{name} ने प्लेबैक अनलॉक किया",
+  "Only {name} can control playback": "सिर्फ़ {name} प्लेबैक नियंत्रित कर सकते हैं",
+  "{name} paused": "{name} ने रोका",
+  "{name} resumed": "{name} ने फिर से चलाया",
+  "{name} skipped to {time}": "{name} {time} पर गए",
+  "{name} skipped": "{name} ने स्किप किया",
 };
 
 export default coverage;

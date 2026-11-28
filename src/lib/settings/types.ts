@@ -318,6 +318,15 @@ export type Settings = {
   togetherCfDeployed: boolean;
   togetherShareCursors: boolean;
   togetherGuestsPick: boolean;
+  /** Host's room starts by itself, after a short cancellable countdown, once everyone is ready. */
+  togetherAutoStart: boolean;
+  /** Only the host can play, pause and seek in the host's room. */
+  togetherHostOnlyControls: boolean;
+  /**
+   * What the host's room does when someone's connection drops: keep playing
+   * (default), pause and wait in rooms of up to 3 people, or always wait.
+   */
+  togetherDropPolicy: "keep-playing" | "auto" | "always";
   togetherChatHistoryOpen: boolean;
   discordRichPresence: boolean;
   discordHideTitle: boolean;

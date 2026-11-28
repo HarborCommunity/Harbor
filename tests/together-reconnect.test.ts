@@ -202,3 +202,212 @@ test("duplicate close callbacks schedule only one reconnect", () => {
   h.advance(1000);
   assert.equal(h.sockets.length, 2);
 });
+
+test("a viewer already playing the room's media is not invited again on rejoin", () => {
+  const h = harness();
+  const invites: any[] = [];
+  h.client.on((e: any) => {
+    if (e.kind === "invite") invites.push(e.invite);
+  });
+  h.client.setActivePlayback("tt9|1|2");
+  h.client.join("ABC123");
+  const socket = h.sockets.at(-1)!;
+  socket.open();
+  const joinedWith = (episode: number) =>
+    socket.message({
+      t: "joined",
+      participants: [
+        { id: "self", name: "Fixture" },
+        { id: "host", name: "Host" },
+      ],
+      hostClientId: "host",
+      state: {
+        mediaId: "tt9",
+        mediaTitle: "Show",
+        episode: { season: 1, episode },
+        posterUrl: null,
+        positionSeconds: 10,
+        playing: true,
+        updatedAt: 0,
+        updatedBy: "host",
+        hostClientId: "host",
+      },
+      started: true,
+      srvAt: 100000,
+    });
+  joinedWith(2);
+  assert.equal(invites.length, 0);
+  socket.message({
+    t: "invite",
+    from: "host",
+    name: "Host",
+    invite: { mediaId: "tt9", episode: { season: 1, episode: 2 } },
+    at: 1,
+  });
+  assert.equal(invites.length, 0);
+  joinedWith(3);
+  assert.equal(invites.length, 1);
+});
+
+test("guest commands sent while disconnected go out once the room is back", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  h.joined();
+  h.sockets[0].close();
+  h.advance(0);
+  h.client.sendCommand({ action: "seek", positionSeconds: 5 });
+  h.client.sendCommand({ action: "pause" });
+  h.advance(1000);
+  h.joined();
+  const commands = h.sockets[1].sent.filter((m) => m.t === "cmd");
+  assert.deepEqual(
+    commands.map((m) => m.command),
+    [{ action: "pause" }],
+  );
+});
+
+test("a state held back after a sync is not published into the next room", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  h.joined();
+  h.client.suppressOutgoingFor(1400);
+  h.client.publishState({
+    mediaId: "tt1",
+    mediaTitle: "Old room",
+    episode: null,
+    posterUrl: null,
+    positionSeconds: 42,
+    playing: true,
+    updatedAt: 100000,
+    updatedBy: "self",
+    hostClientId: null,
+  });
+  h.client.leave();
+  h.client.join("XYZ789");
+  h.joined();
+  h.advance(2000);
+  assert.deepEqual(
+    h.sockets.at(-1)!.sent.filter((m) => m.t === "state"),
+    [],
+  );
+});
+
+test("a command queued while offline never reaches a room joined afterwards", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  h.joined();
+  h.sockets[0].close();
+  h.advance(0);
+  h.client.sendCommand({ action: "pause" });
+  h.client.leave();
+  h.client.join("XYZ789");
+  h.joined();
+  assert.deepEqual(
+    h.sockets.at(-1)!.sent.filter((m) => m.t === "cmd"),
+    [],
+  );
+});
+
+test("a command queued during a long outage is dropped instead of moving the room back", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  h.joined();
+  h.sockets[0].close();
+  h.advance(0);
+  h.client.sendCommand({ action: "seek", positionSeconds: 600 });
+  h.advance(30_000);
+  h.joined();
+  assert.deepEqual(
+    h.sockets.at(-1)!.sent.filter((m) => m.t === "cmd"),
+    [],
+  );
+});
+
+test("while something plays the connection is pinged every 5 s and a silent one dropped within 15 s", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  h.joined();
+  const socket = h.sockets[0];
+  const pings = () => socket.sent.filter((m) => m.t === "ping").length;
+  h.client.setActivePlayback("tt1||");
+  const before = pings();
+  h.advance(10_000);
+  assert.ok(pings() - before >= 2, "about one ping every 5 s");
+  assert.equal(socket.readyState, 1, "12 s of silence have not passed yet");
+  // The check runs on the next 5 s tick after 12 s, so well inside the old 40 s.
+  h.advance(5_000);
+  assert.equal(socket.readyState, 3, "a silent socket is closed and replaced");
+  h.client.setActivePlayback(null);
+});
+
+test("host sample and start times are sent in relay time", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  const socket = h.sockets.at(-1)!;
+  socket.open();
+  socket.message({
+    t: "joined",
+    participants: [{ id: "self", name: "Fixture" }],
+    hostClientId: "self",
+    state: null,
+    started: true,
+    srvAt: 105000,
+  });
+  h.client.publishState({
+    mediaId: "tt1",
+    mediaTitle: null,
+    episode: null,
+    posterUrl: null,
+    positionSeconds: 1,
+    playing: true,
+    sampledAt: 100000,
+    playAt: 101000,
+    updatedAt: 100000,
+    updatedBy: "self",
+    hostClientId: null,
+  });
+  const sent = socket.sent.find((m) => m.t === "state").state;
+  assert.equal(sent.sampledAt, 105000);
+  assert.equal(sent.playAt, 106000);
+});
+
+test("a guest that reconnects after a crash no longer counts as buffering", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  h.joined();
+  const socket = h.sockets[0];
+  socket.message({ t: "participant-joined", participant: { id: "guest", name: "Guest" } });
+  socket.message({ t: "participant-status", clientId: "guest", phase: "buffering" });
+  assert.equal(h.client.getSnapshot().participantStatus.guest, "buffering");
+  socket.message({ t: "participant-joined", participant: { id: "guest", name: "Guest" } });
+  assert.equal(h.client.getSnapshot().participantStatus.guest, undefined);
+  socket.message({ t: "participant-status", clientId: "guest", phase: "buffering" });
+  socket.message({ t: "participant-left", clientId: "guest" });
+  assert.equal(h.client.getSnapshot().participantStatus.guest, undefined);
+});
+
+test("a participant whose connection dropped is shown as away", () => {
+  const h = harness();
+  h.client.join("ABC123");
+  const socket = h.sockets.at(-1)!;
+  socket.open();
+  socket.message({
+    t: "joined",
+    participants: [
+      { id: "self", name: "Fixture" },
+      { id: "host", name: "Host", ready: true },
+    ],
+    hostClientId: "host",
+    state: null,
+    started: true,
+    srvAt: 100000,
+  });
+  socket.message({ t: "participant-away", clientId: "host" });
+  const snap = h.client.getSnapshot();
+  assert.equal(snap.participants.find((p: any) => p.id === "host").away, true);
+  assert.equal(snap.hostAway, true);
+  socket.message({ t: "participant-joined", participant: { id: "host", name: "Host" } });
+  const back = h.client.getSnapshot();
+  assert.equal(back.participants.find((p: any) => p.id === "host").away, undefined);
+  assert.equal(back.hostAway, false);
+});
