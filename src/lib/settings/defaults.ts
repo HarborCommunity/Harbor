@@ -251,6 +251,7 @@ export const DEFAULT: Settings = {
   togetherCfDeployed: false,
   togetherShareCursors: true,
   togetherGuestsPick: false,
+  togetherAutoStart: false,
   togetherChatHistoryOpen: false,
   discordRichPresence: false,
   discordHideTitle: false,

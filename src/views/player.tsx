@@ -59,8 +59,11 @@ import { usePlayerWatched } from "./player/hooks/use-player-watched";
 import { useHoldSpeed } from "./player/hooks/use-hold-speed";
 import { EXTERNAL_PLAYER_CLOSED_EVENT } from "@/lib/player/external-mpv";
 import { useRoomSync } from "./player/hooks/use-room-sync";
+import { setHostMove } from "@/lib/together/host-move";
+import { playbackKey } from "@/lib/together/client";
 import { useHostSource } from "./player/hooks/use-host-source";
 import { useLobbyGate } from "./player/hooks/use-lobby-gate";
+import type { RoomSyncPillNotice } from "./player/room-sync-pill";
 import { hostSourceMatchesMedia } from "@/lib/together/room-derive";
 import { useLiveChannelOverlay } from "./player/hooks/use-live-channel-overlay";
 import { useStreamSwitcher } from "./player/hooks/use-stream-switcher";
@@ -205,6 +208,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     participantLocations,
     startRoom,
     hostSource,
+    setActivePlayback,
   } = useTogether();
   const stageRef = useRef<HTMLDivElement>(null);
   const refreshDockGeometry = useCallback(
@@ -606,6 +610,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     publishState,
   });
 
+  const stayInRoomRef = useRef(false);
   const { closePlayer, onStubEject } = usePlayerExit({
     src: activeMediaSrc,
     season,
@@ -626,22 +631,29 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     clearInvite,
     exitPlayback,
     openPicker,
+    stayInRoomRef,
   });
   closePlayerRef.current = () => void closePlayer();
   // Leaving for another title must go through the same teardown as exiting
   // playback: snapshot, resume, cast, PiP, room and fullscreen, then the picker.
   const playFromEndScreen = useCallback(
     (meta: Parameters<typeof openPicker>[0]) => {
-      void closePlayer().finally(() => openPicker(meta, undefined, { autoPlay: true }));
+      stayInRoomRef.current = true;
+      if (inRoom && isHost) setHostMove("armed");
+      void closePlayer().finally(() => {
+        stayInRoomRef.current = false;
+        openPicker(meta, undefined, { autoPlay: true });
+      });
     },
-    [closePlayer, openPicker],
+    [closePlayer, openPicker, inRoom, isHost],
   );
   const endScreen = useEndScreen({
     src,
     snap,
     enabled: !docked && !pipMode && !src.pipDocked,
     leadSec: settings.endScreenLeadSec,
-    countdownSec: settings.endScreenCountdownSec,
+    // In a room only the host's choice moves everyone; guests wait for it.
+    countdownSec: inRoom && !isHost ? 0 : settings.endScreenCountdownSec,
     onZero: settings.endScreenOnZero,
     tmdbKey: settings.tmdbKey,
     isLive: isLiveLike,
@@ -810,7 +822,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     !liveOverlay.isLive &&
     settings.playerEngine !== "auto";
 
-  const { inRoomRef, isHostRef, initialSyncDoneRef } = useRoomSync({
+  const { inRoomRef, isHostRef, initialSyncDoneRef, startTogether, syncNotice } = useRoomSync({
     inRoom,
     isHost,
     hasStarted,
@@ -831,6 +843,11 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     setForeignNotice,
     cast: cast.sync,
   });
+  const activeKey = playbackKey(src.meta.id, src.episode);
+  useEffect(() => {
+    setActivePlayback(activeKey);
+    return () => setActivePlayback(null);
+  }, [activeKey, setActivePlayback]);
 
   const lobby = useLobbyGate({
     inRoom,
@@ -839,11 +856,20 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     setHasStarted,
     roomSnapshot,
     startRoom,
+    startTogether,
+    autoStart: settings.togetherAutoStart,
     suppressOutgoingFor,
     bridgeRef,
     initialSyncDoneRef,
     mediaKey: `${src.meta.id}|${src.episode?.season ?? ""}|${src.episode?.episode ?? ""}`,
   });
+
+  const roomSyncNotice = useMemo<RoomSyncPillNotice | null>(() => {
+    if (!inRoom || !hasStarted || !syncNotice) return null;
+    if (syncNotice.kind === "countdown") return syncNotice;
+    const host = roomSnapshot.participants.find((p) => p.id === roomSnapshot.hostClientId);
+    return { kind: "host-buffering", host: host?.name ?? t("Host") };
+  }, [inRoom, hasStarted, syncNotice, roomSnapshot.participants, roomSnapshot.hostClientId, t]);
 
   const { rememberSubChoice, cycleSubtitles, playPauseToggle, seekStep, seekTo } =
     usePlaybackControls({
@@ -1571,6 +1597,9 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     isHost,
     staleIds: lobby.staleIds,
     guestEscapeReady: lobby.guestEscapeReady,
+    autoStartAt: lobby.autoStartAt,
+    onCancelAutoStart: lobby.cancelAutoStart,
+    syncNotice: roomSyncNotice,
     onStart: lobby.startHost,
     onPlayWithoutSync: lobby.playWithoutSync,
     guestHostSource,

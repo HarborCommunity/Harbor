@@ -142,6 +142,12 @@ export type PlayerBridge = {
   setVolume: (v: number) => void;
   setMuted: (m: boolean) => void;
   setRate: (r: number) => void;
+  /**
+   * Watch-party drift correction: multiplies the real playback speed without
+   * changing the user's speed in `snap.rate`. Players that cannot change speed
+   * smoothly leave it out, and the room falls back to seeking.
+   */
+  setSyncRateFactor?: (factor: number) => void;
   setAudioTrack: (id: string) => void;
   setSubtitleTrack: (id: string | null, origin?: SubtitleSelectionOrigin) => void;
   canAutoSelectSubtitle?: () => boolean;

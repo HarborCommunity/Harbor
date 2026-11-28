@@ -42,6 +42,8 @@ let DOCUMENT_PIP_KNOWN_BROKEN = false;
 
 export function createHtml5Bridge(): PlayerBridge {
   let video: HTMLVideoElement | null = null;
+  // Watch-party drift correction on top of the user's speed; never shown in snap.rate.
+  let syncRateFactor = 1;
   let host: HTMLElement | null = null;
   let snap: PlayerSnapshot = initialPlayerSnapshot();
   const listeners = new Set<(s: PlayerSnapshot) => void>();
@@ -109,7 +111,10 @@ export function createHtml5Bridge(): PlayerBridge {
     snap.buffering = !video.ended && video.readyState < HTMLMediaElement.HAVE_FUTURE_DATA;
     snap.volume = pendingVolume;
     snap.muted = video.muted;
-    snap.rate = video.playbackRate;
+    snap.rate =
+      syncRateFactor === 1
+        ? video.playbackRate
+        : Math.round((video.playbackRate / syncRateFactor) * 1000) / 1000;
     snap.audioTracks = readHlsAudioTracks() ?? readAudioTracks(video);
     snap.subtitleTracks = readCustomSubtitleTracks();
     snap.subDelaySec = subDelaySec;
@@ -959,7 +964,14 @@ export function createHtml5Bridge(): PlayerBridge {
       if (video) video.muted = m;
     },
     setRate(r) {
-      if (video) video.playbackRate = r;
+      if (video) video.playbackRate = r * syncRateFactor;
+    },
+    setSyncRateFactor(factor) {
+      const next = Number.isFinite(factor) && factor > 0 ? factor : 1;
+      if (next === syncRateFactor) return;
+      const userRate = video ? Math.round((video.playbackRate / syncRateFactor) * 1000) / 1000 : 1;
+      syncRateFactor = next;
+      if (video) video.playbackRate = userRate * next;
     },
     setAudioTrack(id) {
       if (hls && Array.isArray(hls.audioTracks) && hls.audioTracks.length > 0) {

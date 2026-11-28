@@ -1,26 +1,31 @@
-import { ListChecks } from "lucide-react";
+import { ListChecks, PlayCircle, type LucideIcon } from "lucide-react";
 import { useSettings } from "@/lib/settings";
 import { useKnobAnim } from "@/lib/knob-anim";
 import { useT } from "@/lib/i18n";
 
-export function GuestPickToggle() {
+type RoomSettingKey = "togetherGuestsPick" | "togetherAutoStart";
+
+function RoomSettingToggle(props: {
+  setting: RoomSettingKey;
+  icon: LucideIcon;
+  title: string;
+  description: string;
+}) {
   const { settings, update } = useSettings();
-  const t = useT();
-  const on = settings.togetherGuestsPick;
+  const on = settings[props.setting];
   const knob = useKnobAnim(on);
+  const Icon = props.icon;
   return (
     <button
-      onClick={() => update({ togetherGuestsPick: !on })}
+      onClick={() => update({ [props.setting]: !on })}
       className="flex h-12 items-center justify-between gap-2 rounded-lg border border-edge px-3 text-[12.5px] text-ink-muted transition-colors hover:bg-elevated hover:text-ink"
       aria-pressed={on}
     >
       <span className="flex min-w-0 items-center gap-2">
-        <ListChecks size={13} strokeWidth={1.9} className="shrink-0" />
+        <Icon size={13} strokeWidth={1.9} className="shrink-0" />
         <span className="flex min-w-0 flex-col text-start">
-          <span className="truncate">{t("Guests pick their own source")}</span>
-          <span className="truncate text-[10.5px] text-ink-subtle">
-            {t("Prompts guests to choose instead of auto-matching")}
-          </span>
+          <span className="truncate">{props.title}</span>
+          <span className="truncate text-[10.5px] text-ink-subtle">{props.description}</span>
         </span>
       </span>
       <span
@@ -36,5 +41,29 @@ export function GuestPickToggle() {
         />
       </span>
     </button>
+  );
+}
+
+export function GuestPickToggle() {
+  const t = useT();
+  return (
+    <RoomSettingToggle
+      setting="togetherGuestsPick"
+      icon={ListChecks}
+      title={t("Guests pick their own source")}
+      description={t("Prompts guests to choose instead of auto-matching")}
+    />
+  );
+}
+
+export function AutoStartToggle() {
+  const t = useT();
+  return (
+    <RoomSettingToggle
+      setting="togetherAutoStart"
+      icon={PlayCircle}
+      title={t("Start when everyone is ready")}
+      description={t("Counts down, then plays for the room")}
+    />
   );
 }
