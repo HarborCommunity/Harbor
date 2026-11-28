@@ -114,12 +114,16 @@ function cleanEpisode(ep: PendingEpisodeInput): PendingEpisode | undefined {
   ) {
     out.tvdbEpisodeId = ep.tvdbEpisodeId;
   }
-  if (typeof ep.sourceMetaId === "string" &&
-      /^(?:kitsu|mal|anilist|anidb):[1-9]\d*$/.test(ep.sourceMetaId))
+  if (
+    typeof ep.sourceMetaId === "string" &&
+    /^(?:kitsu|mal|anilist|anidb):[1-9]\d*$/.test(ep.sourceMetaId)
+  )
     out.sourceMetaId = ep.sourceMetaId;
-  if (typeof ep.kitsuStreamId === "string" &&
-      /^kitsu:[1-9]\d*:[1-9]\d*$/.test(ep.kitsuStreamId) &&
-      (!out.sourceMetaId || ep.kitsuStreamId.startsWith(`${out.sourceMetaId}:`)))
+  if (
+    typeof ep.kitsuStreamId === "string" &&
+    /^kitsu:[1-9]\d*:[1-9]\d*$/.test(ep.kitsuStreamId) &&
+    (!out.sourceMetaId || ep.kitsuStreamId.startsWith(`${out.sourceMetaId}:`))
+  )
     out.kitsuStreamId = ep.kitsuStreamId;
   return out;
 }
@@ -159,6 +163,13 @@ export function recordPendingWatch(
 
 function clearPending(key: string): void {
   save(load().filter((p) => keyOf(p) !== key));
+}
+
+/** Drops one queued watch after a direct history write confirmed it. */
+export function clearPendingWatch(metaId: string, episode: PendingEpisodeInput): void {
+  const clean = cleanEpisode(episode);
+  if (episode != null && !clean) return;
+  clearPending(keyOf({ metaId, ...(clean ? { episode: clean } : {}) }));
 }
 
 let flushDeps: FlushDeps | null = null;

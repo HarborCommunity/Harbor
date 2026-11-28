@@ -7,6 +7,7 @@ import test from "node:test";
 import "./_localstorage-stub.ts";
 import {
   armPendingFlush,
+  clearPendingWatch,
   flushPendingWatches,
   listPendingWatches,
   recordPendingWatch,
@@ -72,6 +73,18 @@ test("different episodes queue independently", () => {
   recordPendingWatch("kitsu:1", { season: 1, episode: 2 });
   recordPendingWatch("kitsu:1", { season: 1, episode: 3 });
   assert.equal(listPendingWatches().length, 2);
+});
+
+test("a confirmed direct write clears only its own queued watch", () => {
+  clearPending();
+  recordPendingWatch("tt0182576", { season: 10, episode: 9 }, "tt0182576");
+  recordPendingWatch("tt0182576", { season: 10, episode: 8 }, "tt0182576");
+  clearPendingWatch("tt0182576", { season: 10, episode: 9 });
+  assert.deepEqual(
+    listPendingWatches().map((p) => p.episode?.episode),
+    [8],
+  );
+  clearPending();
 });
 
 test("flush with no session is a no-op that preserves entries", async () => {
@@ -229,7 +242,10 @@ test("hook queues failed stops and provider flushes on session", () => {
   const provider = readFileSync(new URL("../src/lib/simkl/provider.tsx", import.meta.url), "utf8");
   assert.match(provider, /armPendingFlush\(\{/);
   assert.match(provider, /stopScrobble:/);
-  assert.match(provider, /"stop", metaId, episode, 100, undefined, Boolean\(episode\?\.sourceMetaId\)/);
+  assert.match(
+    provider,
+    /"stop", metaId, episode, 100, undefined, Boolean\(episode\?\.sourceMetaId\)/,
+  );
   assert.match(provider, /flushPendingWatches\(\)/);
 });
 
@@ -244,12 +260,13 @@ test("the armed replay retries on a clock, not only on the next launch", () => {
   assert.match(scrobble, /action === "stop" && e instanceof SimklApiError && e\.status === 409/);
 });
 
-
 test("verified native anime pending identity survives storage and replays only to the native owner", async () => {
   clearPending();
   recordPendingWatch("kitsu:49847", {
-    season: 1, episode: 1,
-    sourceMetaId: "kitsu:49847", kitsuStreamId: "kitsu:49847:1",
+    season: 1,
+    episode: 1,
+    sourceMetaId: "kitsu:49847",
+    kitsuStreamId: "kitsu:49847:1",
   });
   const queued = listPendingWatches();
   assert.equal(queued.length, 1);
@@ -279,8 +296,10 @@ test("verified native anime pending identity survives storage and replays only t
 test("mismatched stream IDs are never persisted as verified native evidence", () => {
   clearPending();
   recordPendingWatch("kitsu:49847", {
-    season: 1, episode: 1,
-    sourceMetaId: "kitsu:49847", kitsuStreamId: "kitsu:44294:1",
+    season: 1,
+    episode: 1,
+    sourceMetaId: "kitsu:49847",
+    kitsuStreamId: "kitsu:44294:1",
   });
   assert.equal(listPendingWatches()[0]?.episode?.kitsuStreamId, undefined);
   clearPending();
