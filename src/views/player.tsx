@@ -59,6 +59,7 @@ import { usePlayerWatched } from "./player/hooks/use-player-watched";
 import { useHoldSpeed } from "./player/hooks/use-hold-speed";
 import { EXTERNAL_PLAYER_CLOSED_EVENT } from "@/lib/player/external-mpv";
 import { useRoomSync } from "./player/hooks/use-room-sync";
+import { playbackKey } from "@/lib/together/client";
 import { useHostSource } from "./player/hooks/use-host-source";
 import { useLobbyGate } from "./player/hooks/use-lobby-gate";
 import { hostSourceMatchesMedia } from "@/lib/together/room-derive";
@@ -205,6 +206,7 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     participantLocations,
     startRoom,
     hostSource,
+    setActivePlayback,
   } = useTogether();
   const stageRef = useRef<HTMLDivElement>(null);
   const refreshDockGeometry = useCallback(
@@ -831,6 +833,11 @@ function NativePlayerView({ src }: { src: PlayerSrc }) {
     setForeignNotice,
     cast: cast.sync,
   });
+  const activeKey = playbackKey(src.meta.id, src.episode);
+  useEffect(() => {
+    setActivePlayback(activeKey);
+    return () => setActivePlayback(null);
+  }, [activeKey, setActivePlayback]);
 
   const lobby = useLobbyGate({
     inRoom,

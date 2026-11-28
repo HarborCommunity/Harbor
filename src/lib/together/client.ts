@@ -18,12 +18,25 @@ export type { ClientState, RoomEvent, RoomSnapshot } from "./client-types";
 const AVATAR_MAX_CHARS = 590_000;
 const PING_INTERVAL_MS = 25_000;
 const LIVENESS_TIMEOUT_MS = 40_000;
+// While a watch party is playing, a dead connection must be noticed quickly.
+const PLAYBACK_PING_INTERVAL_MS = 5_000;
+const PLAYBACK_LIVENESS_TIMEOUT_MS = 12_000;
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 const MAX_RENAME_ATTEMPTS = 8;
 const RENAME_RECONNECT_MS = 60;
 const CONNECT_TIMEOUT_MS = 10_000;
 const MAX_FAIL_STREAK = 4;
+/** A play, pause or seek queued while offline is dropped once older than this. */
+const PENDING_COMMAND_MAX_AGE_MS = 5_000;
+
+/** The key a player and an invite share for "this title, this episode". */
+export function playbackKey(
+  mediaId: string,
+  episode: { season: number; episode: number } | null | undefined,
+): string {
+  return `${mediaId}|${episode?.season ?? ""}|${episode?.episode ?? ""}`;
+}
 
 function capAvatar(avatar: string | null): string | null {
   return avatar && avatar.length > AVATAR_MAX_CHARS ? null : avatar;
@@ -54,6 +67,9 @@ export class TogetherClient {
   private intentional = false;
   private suppressUntil = 0;
   private outQueue: ClientMessage[] = [];
+  private pendingCommand: { command: RoomCommand; at: number } | null = null;
+  private activePlaybackKey: string | null = null;
+  private playbackActive = false;
   private lastSentInvite: PlayInvite | null = null;
   private claimedHost = false;
 
@@ -142,12 +158,33 @@ export class TogetherClient {
     this.suppressUntil = Date.now() + ms;
   }
 
+  /**
+   * The media this client is playing right now, or null. An invite for media
+   * that is already playing must never pull the viewer out to the picker, and
+   * while something plays the connection is checked more often.
+   */
+  setActivePlayback(key: string | null) {
+    this.activePlaybackKey = key;
+    const active = key != null;
+    if (active === this.playbackActive) return;
+    this.playbackActive = active;
+    if (this.pingTimer != null) this.startPing();
+  }
+
+  private isActivePlayback(invite: PlayInvite): boolean {
+    return (
+      this.activePlaybackKey != null &&
+      this.activePlaybackKey === playbackKey(invite.mediaId, invite.episode)
+    );
+  }
+
   join(room: RoomCode, listenJoin?: ListenJoin): void {
     if (this.ws && this.ws.readyState === WebSocket.OPEN && this.room && this.room !== room) {
       this.sendNow({ t: "leave", room: this.room, clientId: this.clientId });
     }
     this.cleanup();
     this.outQueue = [];
+    this.pendingCommand = null;
     this.lastSentInvite = null;
     this.reconnectAttempt = 0;
     this.intentional = false;
@@ -181,6 +218,7 @@ export class TogetherClient {
     this.listenJoin = undefined;
     this.resume = undefined;
     this.outQueue = [];
+    this.pendingCommand = null;
     this.lastSentInvite = null;
     this.claimedHost = false;
     this.update({
@@ -284,7 +322,11 @@ export class TogetherClient {
 
   sendCommand(command: RoomCommand): void {
     if (!this.room) return;
-    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      // Only the newest request matters; it is sent if the room is back soon.
+      this.pendingCommand = { command, at: Date.now() };
+      return;
+    }
     this.sendNow({ t: "cmd", room: this.room, clientId: this.clientId, command });
   }
 
@@ -505,7 +547,12 @@ export class TogetherClient {
           this.emit({ kind: "incoming-state", state: msg.state });
           const stateAuthorPresent =
             !!msg.state.updatedBy && msg.participants.some((p) => p.id === msg.state!.updatedBy);
-          if (msg.state.mediaId && msg.state.updatedBy !== this.clientId && stateAuthorPresent) {
+          if (
+            msg.state.mediaId &&
+            msg.state.updatedBy !== this.clientId &&
+            stateAuthorPresent &&
+            this.activePlaybackKey !== playbackKey(msg.state.mediaId, msg.state.episode)
+          ) {
             const hostName =
               msg.participants.find((p) => p.id === msg.state!.updatedBy)?.name ?? "Host";
             this.emit({
@@ -625,6 +672,9 @@ export class TogetherClient {
         return;
       case "invite":
         if (msg.from === this.clientId) return;
+        // Hosts re-send their invite on reconnect and whenever someone joins;
+        // a viewer already playing that media must stay in the player.
+        if (this.isActivePlayback(msg.invite)) return;
         this.emit({
           kind: "invite",
           from: msg.from,
@@ -773,6 +823,16 @@ export class TogetherClient {
     const queue = this.outQueue;
     this.outQueue = [];
     for (const m of queue) this.sendNow(m);
+    const pending = this.pendingCommand;
+    this.pendingCommand = null;
+    // After a long outage the room has moved on; an old seek would drag everyone back.
+    if (pending && this.room && Date.now() - pending.at <= PENDING_COMMAND_MAX_AGE_MS)
+      this.sendNow({
+        t: "cmd",
+        room: this.room,
+        clientId: this.clientId,
+        command: pending.command,
+      });
   }
 
   private handleNameCollision(participants: Participant[]): boolean {
@@ -808,17 +868,21 @@ export class TogetherClient {
 
   private startPing() {
     this.stopPing();
-    this.pingTimer = window.setInterval(() => {
-      if (this.lastInboundAt && Date.now() - this.lastInboundAt > LIVENESS_TIMEOUT_MS) {
-        try {
-          this.ws?.close();
-        } catch {
-          /* ignore */
+    const liveness = this.playbackActive ? PLAYBACK_LIVENESS_TIMEOUT_MS : LIVENESS_TIMEOUT_MS;
+    this.pingTimer = window.setInterval(
+      () => {
+        if (this.lastInboundAt && Date.now() - this.lastInboundAt > liveness) {
+          try {
+            this.ws?.close();
+          } catch {
+            /* ignore */
+          }
+          return;
         }
-        return;
-      }
-      this.sendPing();
-    }, PING_INTERVAL_MS);
+        this.sendPing();
+      },
+      this.playbackActive ? PLAYBACK_PING_INTERVAL_MS : PING_INTERVAL_MS,
+    );
   }
 
   private recordPong(srvAt: number | undefined) {
