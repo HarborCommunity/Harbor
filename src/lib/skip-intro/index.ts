@@ -7,6 +7,7 @@ import { fetchAdSegments } from "./adcorpus";
 import { fingerprint } from "./fingerprint";
 import { fetchAniSkipSegments, kitsuToMal } from "./aniskip";
 import { chaptersToSegments } from "./chapters";
+import { dropSelfContradicting } from "./consensus";
 import { fetchIntroDbAppSegments } from "./introdb-app";
 import { fetchSkipDbSegments } from "./skipdb";
 import { fetchIntroDbSegments, readTheIntroDbKey, setTheIntroDbApiKey } from "./theintrodb";
@@ -208,7 +209,9 @@ export function useSkipSegments(
   );
 
   return useMemo(() => {
-    const base = mergeSegments([adSegments, aniSkip, skipDb, introDb, introDbApp, fromChapters]);
+    const base = mergeSegments(
+      [adSegments, aniSkip, skipDb, introDb, introDbApp, fromChapters].map(dropSelfContradicting),
+    );
     if (durationSec <= 0) return base;
     const minOutroStart = durationSec * MIN_OUTRO_START_FRACTION;
     return base
