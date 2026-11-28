@@ -1,4 +1,24 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} hat die Verbindung verloren. Warten auf die Rückkehr…",
+  "When someone drops": "Wenn jemand rausfliegt",
+  "Keep playing": "Weiterspielen",
+  "Always wait": "Immer warten",
+  "Everyone else carries on": "Alle anderen schauen weiter",
+  "Pauses and waits in rooms of up to 3 people":
+    "Pausiert und wartet in Räumen mit bis zu 3 Personen",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Pausiert und wartet bis zu 2 Minuten auf die Rückkehr",
+  "Waiting for {names} to reconnect…": "Warten, bis {names} wieder verbunden sind…",
+  "Rejoin watch party": "Watch-Party wieder beitreten",
+  Rejoin: "Wieder beitreten",
+  "Update your relay to use this": "Aktualisiere dein Relay, um das zu nutzen",
+  "Waiting for {names} to load…": "Warten, bis {names} geladen haben…",
+  "Start when everyone is ready": "Starten, wenn alle bereit sind",
+  "Counts down, then plays for the room": "Zählt herunter und startet dann für den Raum",
+  "Starting in {n}… Cancel": "Start in {n}… Abbrechen",
+  "Starting together in {n}…": "Gemeinsamer Start in {n}…",
+  "Waiting for {name} to load…": "Warten, bis {name} geladen hat…",
   "Waiting for {name}…": "Warte auf {name}…",
   "Keeping the source you were watching.": "Die Quelle, die du gerade ansiehst, wird beibehalten.",
   "Sound descriptions": "Geräuschbeschreibungen",
@@ -928,6 +948,22 @@ const coverage: Record<string, string> = {
     "Wandelt HDR-Quellen in SDR um. Funktioniert mit eingebetteter Wiedergabe und SDR-Bildschirmen.",
   "Uses mpv's native window and automatic Wayland color management (mpv 0.41 or newer recommended). Requires a compatible GPU driver, compositor and HDR-enabled display. X11 falls back to SDR. Restart playback to apply.":
     "Verwendet das native mpv-Fenster und die automatische Wayland-Farbverwaltung (mpv 0.41 oder neuer empfohlen). Erfordert einen kompatiblen GPU-Treiber, Compositor und einen Bildschirm mit aktiviertem HDR. Unter X11 wird auf SDR zurückgegriffen. Starte die Wiedergabe neu, um die Änderung anzuwenden.",
+  "Only I control playback": "Nur ich steuere die Wiedergabe",
+  "Guests can't play, pause or skip": "Gäste können nicht abspielen, pausieren oder springen",
+  "{name} locked playback": "{name} hat die Wiedergabe gesperrt",
+  "{name} unlocked playback": "{name} hat die Wiedergabe freigegeben",
+  "Only {name} can control playback": "Nur {name} kann die Wiedergabe steuern",
+  "{name} paused": "{name} hat pausiert",
+  "{name} resumed": "{name} hat fortgesetzt",
+  "{name} skipped to {time}": "{name} ist zu {time} gesprungen",
+  "{name} skipped": "{name} ist gesprungen",
+  React: "Reagieren",
+  Reactions: "Reaktionen",
+  " · loading": " · lädt",
+  " · {n}s behind": " · {n} s zurück",
+  " · {n}s ahead": " · {n} s voraus",
+  "−{n}s": "−{n} s",
+  "+{n}s": "+{n} s",
 };
 
 export default coverage;

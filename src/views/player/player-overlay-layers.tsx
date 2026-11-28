@@ -149,6 +149,8 @@ export type PlayerOverlayLayersProps = {
   participants: Room["participants"];
   hostClientId: Room["hostClientId"];
   syncState: Room["syncState"];
+  participantStatus: Room["participantStatus"];
+  participantOffset: Room["participantOffset"];
   avatarsVisible: boolean;
   presenceMap: Room["presenceMap"];
   participantLocations: Room["participantLocations"];
@@ -157,6 +159,8 @@ export type PlayerOverlayLayersProps = {
   avatarsHidden: boolean;
   chat: Room["chat"];
   sendChat: Room["sendChat"];
+  onReact: Room["onReact"];
+  reactions: Room["reactions"];
   chromeVisible: boolean;
   chatCorner: Room["chatCorner"];
   chatHidden: boolean;
@@ -173,6 +177,11 @@ export type PlayerOverlayLayersProps = {
   switcherOpen: boolean;
   foreignNotice: Room["foreignNotice"];
   onDismissForeign: () => void;
+  syncNotice: Room["syncNotice"];
+  onKeepWatching?: () => void;
+  activityNotice: Room["activityNotice"];
+  autoStartAt: Room["autoStartAt"];
+  onCancelAutoStart: () => void;
   streamPillVariant: Pill["variant"] | null;
   mpvEmbedWindowsActive: boolean;
   setStreamCheckOpen: (v: boolean) => void;
@@ -449,6 +458,8 @@ export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOv
         clientId={p.clientId}
         hostClientId={p.hostClientId}
         syncState={p.syncState}
+        participantStatus={p.participantStatus}
+        participantOffset={p.participantOffset}
         avatarsVisible={p.avatarsVisible}
         presenceMap={p.presenceMap}
         participantLocations={p.participantLocations}
@@ -457,6 +468,8 @@ export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOv
         avatarsHidden={p.avatarsHidden}
         chat={p.chat}
         sendChat={p.sendChat}
+        onReact={p.onReact}
+        reactions={p.reactions}
         chromeVisible={p.chromeVisible}
         chatCorner={p.chatCorner}
         chatHidden={p.chatHidden}
@@ -475,6 +488,12 @@ export const PlayerOverlayLayers = memo(function PlayerOverlayLayers(p: PlayerOv
         onFindCloser={p.pickAnother}
         foreignNotice={p.foreignNotice}
         onDismissForeign={p.onDismissForeign}
+        syncNotice={p.syncNotice}
+        onKeepWatching={p.onKeepWatching}
+        activityNotice={p.activityNotice}
+        belowStreamCheck={!!p.streamPillVariant && !p.switcherOpen}
+        autoStartAt={p.autoStartAt}
+        onCancelAutoStart={p.onCancelAutoStart}
       />
 
       {p.streamPillVariant && !p.switcherOpen && (

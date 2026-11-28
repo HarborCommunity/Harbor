@@ -1,35 +1,78 @@
-import { useEffect, useRef, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import type { PlayerBridge, PlayerSnapshot } from "@/lib/player/bridge";
 import { getPlaybackBuffered, getPlaybackPosition } from "@/lib/player/playback-clock";
 import type { PartialSyncState } from "@/lib/together/provider";
 import type { RoomSnapshot } from "@/lib/together/client";
-import type { SourceDescriptor, SyncState } from "@/lib/together/protocol";
-import type { PlayerSrc } from "@/lib/view";
-import type { RoomCommand } from "@/lib/together/protocol";
 import {
-  HOST_HEARTBEAT_MS,
-  SEEK_APPLY_DEBOUNCE_MS,
+  RELAY_SOCIAL_VERSION,
+  RELAY_SYNC_STATUS_VERSION,
+  type ParticipantSyncPhase,
+  type RoomCommand,
+  type SourceDescriptor,
+  type SyncState,
+} from "@/lib/together/protocol";
+import {
+  STALL_MAX_MOVE_S,
+  anchorFromState,
+  decideCorrection,
+  expectedPosition,
+  isHostStalled,
+  safeRate,
+  type HostSample,
+  type TimelineAnchor,
+} from "@/lib/together/timeline";
+import { reportedOffset } from "@/lib/together/sync-health";
+import type { PlayerSrc } from "@/lib/view";
+import {
   SYNC_DRIFT_TOLERANCE_S,
   SYNC_MAX_AGE_S,
   SYNC_PLAY_LOOKAHEAD_S,
   SYNC_SEEK_JUMP_S,
   SYNC_SUPPRESS_MS,
 } from "../player-utils";
+import { useRoomHostSync, type DropPolicy, type RoomActivity } from "./use-room-host-sync";
 
 type ForeignNotice = { title: string | null; from: string };
 
-function syncRate(state: SyncState): number {
-  return typeof state.speed === "number" && Number.isFinite(state.speed) && state.speed > 0
-    ? state.speed
-    : 1;
-}
+/** What the guest shows while the shared timeline holds it back. */
+export type RoomSyncNotice = { kind: "host-buffering" } | { kind: "countdown"; at: number };
+
+/** How often a guest compares its position with the shared timeline. */
+const GUEST_CORRECTION_TICK_MS = 250;
+/** A paused guest snaps to the host's paused frame when further off than this. */
+const PAUSE_SNAP_S = 0.1;
+/** A resuming guest seeks first only when further off than this; nudging handles the rest. */
+const RESUME_SEEK_S = 1;
+/** After a corrective seek the playback clock needs time to settle before the next decision. */
+const SEEK_SETTLE_MS = 1500;
+/** A change older than this (a state replayed on join) is not announced. */
+const ACTIVITY_FRESH_MS = 5000;
+/** A guest reports buffering to the room only after waiting this long. */
+const BUFFERING_REPORT_MS = 1000;
+/** A guest that reported buffering is ready again once this much is buffered. */
+const READY_BUFFER_S = 2;
+/** A new distance from the host is reported only once it has held this long. */
+const OFFSET_STEADY_MS = 1500;
 
 function syncTarget(state: SyncState, duration: number): number {
   const age = Math.min(SYNC_MAX_AGE_S, Math.max(0, (Date.now() - state.updatedAt) / 1000));
   // Age and lookahead are wall-clock seconds; project them at the host's rate.
   const target =
-    state.positionSeconds + (state.playing ? (age + SYNC_PLAY_LOOKAHEAD_S) * syncRate(state) : 0);
+    state.positionSeconds +
+    (state.playing ? (age + SYNC_PLAY_LOOKAHEAD_S) * safeRate(state.speed) : 0);
   return duration > 0 ? Math.min(target, Math.max(0, duration - 0.25)) : target;
+}
+
+/** Where to seek so playback lands on the timeline once the seek has taken effect. */
+function seekTarget(anchor: TimelineAnchor, now: number, duration: number): number {
+  const ahead = anchor.playing ? SYNC_PLAY_LOOKAHEAD_S * anchor.rate : 0;
+  const target = expectedPosition(anchor, now) + ahead;
+  return duration > 0 ? Math.min(target, Math.max(0, duration - 0.25)) : target;
+}
+
+/** The host scheduled the start for a moment that has not come yet. */
+function isScheduled(state: SyncState, now: number): boolean {
+  return typeof state.playAt === "number" && state.playAt > now + 50;
 }
 
 function isDifferentMedia(state: SyncState, src: PlayerSrc): boolean {
@@ -55,10 +98,14 @@ export function useRoomSync(params: {
   bridgeRef: RefObject<PlayerBridge | null>;
   hostSourceRef: RefObject<SourceDescriptor | null>;
   guestPickRef: RefObject<boolean>;
+  hostOnlyRef?: RefObject<boolean>;
   publishState: (state: PartialSyncState) => void;
   onIncomingState: (cb: (state: SyncState) => void) => () => void;
   onIncomingCommand: (cb: (from: string, command: RoomCommand) => void) => () => void;
   markReady: (ready: boolean) => void;
+  sendStatus?: (phase: ParticipantSyncPhase, offset?: number) => void;
+  claimHost?: (fresh: boolean) => void;
+  dropPolicy?: DropPolicy;
   suppressOutgoingFor: (ms: number) => void;
   setForeignNotice: (n: ForeignNotice | null) => void;
   cast?: {
@@ -83,147 +130,159 @@ export function useRoomSync(params: {
     bridgeRef,
     hostSourceRef,
     guestPickRef,
+    hostOnlyRef,
     publishState,
     onIncomingState,
     onIncomingCommand,
     markReady,
+    sendStatus,
+    claimHost,
+    dropPolicy,
     suppressOutgoingFor,
     setForeignNotice,
     cast,
   } = params;
 
+  const skipDroppedRef = useRef(false);
+  const [activity, setActivity] = useState<RoomActivity | null>(null);
+  const lastCauseIdRef = useRef<number | null | undefined>(undefined);
+  const { startTogether, waitingFor, skipWaiting, countdownAt, noteLocalAction } = useRoomHostSync({
+    inRoom,
+    isHost,
+    hasStarted,
+    roomSnapshot,
+    clientId,
+    src,
+    snap,
+    bridgeRef,
+    hostSourceRef,
+    guestPickRef,
+    hostOnlyRef,
+    publishState,
+    onIncomingCommand,
+    onActivity: setActivity,
+    dropPolicy,
+    skipDroppedRef,
+    cast,
+  });
+
   const inRoomRef = useRef(inRoom);
   inRoomRef.current = inRoom;
   const isHostRef = useRef(isHost);
   isHostRef.current = isHost;
+  const roomStartedRef = useRef(roomSnapshot.started);
+  roomStartedRef.current = roomSnapshot.started;
+  const hostAwayRef = useRef(roomSnapshot.hostAway);
+  hostAwayRef.current = roomSnapshot.hostAway;
   const syncCatchUpRef = useRef(false);
   const lastAppliedStateAtRef = useRef(0);
+  const anchorRef = useRef<TimelineAnchor | null>(null);
+  const stallSampleRef = useRef<HostSample | null>(null);
+  const lastSeekAtRef = useRef(0);
+  const factorRef = useRef(1);
+  const scheduledPlayRef = useRef<number | null>(null);
+  const [notice, setNotice] = useState<RoomSyncNotice | null>(null);
+  const noticeRef = useRef<RoomSyncNotice | null>(null);
   const mediaKey = `${src.meta.id}|${src.episode?.season ?? ""}|${src.episode?.episode ?? ""}`;
 
-  useEffect(() => {
-    syncCatchUpRef.current = false;
-    lastAppliedStateAtRef.current = 0;
-  }, [src.url, mediaKey, inRoom]);
-
-  const publishedRef = useRef<{ status: string; positionSec: number; at: number }>({
-    status: "",
-    positionSec: 0,
-    at: 0,
-  });
   const statusRef = useRef(snap.status);
   statusRef.current = snap.status;
+  const bufferingRef = useRef(snap.buffering);
+  bufferingRef.current = snap.buffering;
   const durationRef = useRef(snap.durationSec);
   durationRef.current = snap.durationSec;
   const rateRef = useRef(snap.rate);
   rateRef.current = snap.rate;
   const initialSyncDoneRef = useRef(false);
 
-  useEffect(() => {
-    if (!inRoom || !isHost || !hasStarted) return;
-    if (cast?.activeRef.current) return;
-    const tick = () => {
-      if (cast?.activeRef.current) return;
-      const status = statusRef.current;
-      if (status !== "playing" && status !== "paused") return;
-      const pos = getPlaybackPosition();
-      if (durationRef.current <= 0) return;
-      if (pos <= 0) return;
-      publishState({
-        mediaId: src.meta.id,
-        mediaTitle: src.meta.name ?? null,
-        episode: src.episode
-          ? { season: src.episode.season, episode: src.episode.episode, name: src.episode.name }
-          : null,
-        posterUrl: src.meta.poster ?? null,
-        positionSeconds: pos,
-        playing: status === "playing",
-        speed: rateRef.current,
-        source: hostSourceRef.current ?? undefined,
-        guestPick: guestPickRef.current || undefined,
-      });
-    };
-    tick();
-    const id = window.setInterval(tick, HOST_HEARTBEAT_MS);
-    return () => window.clearInterval(id);
-  }, [
-    inRoom,
-    isHost,
-    hasStarted,
-    publishState,
-    src.meta.id,
-    src.meta.name,
-    src.meta.poster,
-    src.episode,
-    cast,
-  ]);
-
-  const seekSeqRef = useRef<Map<string, number>>(new Map());
-  const pendingSeekRef = useRef<number | null>(null);
-  const seekApplyTimerRef = useRef<number | null>(null);
-  const clearPendingSeek = () => {
-    if (seekApplyTimerRef.current != null) {
-      window.clearTimeout(seekApplyTimerRef.current);
-      seekApplyTimerRef.current = null;
+  const showNotice = (next: RoomSyncNotice | null) => {
+    const cur = noticeRef.current;
+    if (cur === next) return;
+    if (cur && next && cur.kind === next.kind) {
+      if (cur.kind === "host-buffering") return;
+      if (next.kind === "countdown" && cur.kind === "countdown" && cur.at === next.at) return;
     }
-    pendingSeekRef.current = null;
+    noticeRef.current = next;
+    setNotice(next);
   };
-  useEffect(() => {
-    if (inRoom && isHost) return;
-    clearPendingSeek();
-  }, [inRoom, isHost]);
-  useEffect(() => clearPendingSeek, []);
-  useEffect(() => {
-    if (!inRoom || !isHost) return;
-    const applySeek = (pos: number) => {
-      const b = bridgeRef.current;
-      if (!b || durationRef.current <= 0) return;
-      b.seek(Math.max(0, Math.min(pos, durationRef.current - 1)));
-    };
-    const fireTimer = () => {
-      seekApplyTimerRef.current = null;
-      const pos = pendingSeekRef.current;
-      pendingSeekRef.current = null;
-      if (pos == null) return;
-      if (!inRoomRef.current || !isHostRef.current) return;
-      applySeek(pos);
-    };
-    const flushPending = () => {
-      if (seekApplyTimerRef.current != null) {
-        window.clearTimeout(seekApplyTimerRef.current);
-        seekApplyTimerRef.current = null;
-      }
-      const pos = pendingSeekRef.current;
-      pendingSeekRef.current = null;
-      if (pos != null) applySeek(pos);
-    };
-    const off = onIncomingCommand((from, command) => {
-      if (cast?.activeRef.current) return;
-      const b = bridgeRef.current;
-      if (!b) return;
-      if (command.action === "play") {
-        flushPending();
-        b.play({ reason: "room" }).catch(() => {});
-      } else if (command.action === "pause") {
-        flushPending();
-        b.pause("room");
-      } else if (command.action === "seek") {
-        if (typeof command.seq === "number") {
-          const last = seekSeqRef.current.get(from);
-          if (last != null && command.seq <= last) return;
-          seekSeqRef.current.set(from, command.seq);
-        }
-        pendingSeekRef.current = command.positionSeconds;
-        if (seekApplyTimerRef.current != null) window.clearTimeout(seekApplyTimerRef.current);
-        seekApplyTimerRef.current = window.setTimeout(fireTimer, SEEK_APPLY_DEBOUNCE_MS);
-      }
+
+  const setSyncFactor = (factor: number) => {
+    if (Math.abs(factor - factorRef.current) < 0.002) return;
+    factorRef.current = factor;
+    bridgeRef.current?.setSyncRateFactor?.(factor);
+  };
+
+  const cancelScheduledPlay = () => {
+    if (scheduledPlayRef.current != null) window.clearTimeout(scheduledPlayRef.current);
+    scheduledPlayRef.current = null;
+  };
+
+  /** Hold at the anchor's position and start exactly at its scheduled instant. */
+  const schedulePlay = (anchor: TimelineAnchor, b: PlayerBridge) => {
+    cancelScheduledPlay();
+    setSyncFactor(1);
+    if (statusRef.current === "playing") b.pause("room");
+    if (Math.abs(getPlaybackPosition() - anchor.positionSeconds) > PAUSE_SNAP_S)
+      b.seek(anchor.positionSeconds);
+    showNotice({ kind: "countdown", at: anchor.startedAt });
+    scheduledPlayRef.current = window.setTimeout(
+      () => {
+        scheduledPlayRef.current = null;
+        showNotice(null);
+        bridgeRef.current?.play({ reason: "room" }).catch(() => {});
+      },
+      Math.max(0, anchor.startedAt - Date.now()),
+    );
+  };
+
+  /** Nudge the speed for small gaps; jump for large ones. */
+  const correct = (anchor: TimelineAnchor, b: PlayerBridge) => {
+    const now = Date.now();
+    if (bufferingRef.current || now - lastSeekAtRef.current < SEEK_SETTLE_MS) {
+      setSyncFactor(1);
+      return;
+    }
+    const gapS = expectedPosition(anchor, now, durationRef.current) - getPlaybackPosition();
+    const decision = decideCorrection({
+      gapS,
+      nudging: factorRef.current !== 1,
+      canNudge: typeof b.setSyncRateFactor === "function",
     });
-    return off;
-  }, [inRoom, isHost, onIncomingCommand, bridgeRef, cast]);
+    if (decision.kind === "nudge") {
+      setSyncFactor(decision.factor);
+      return;
+    }
+    setSyncFactor(1);
+    if (decision.kind === "seek") {
+      b.seek(seekTarget(anchor, now, durationRef.current));
+      lastSeekAtRef.current = now;
+      syncCatchUpRef.current = true;
+    }
+  };
+
+  useEffect(() => {
+    syncCatchUpRef.current = false;
+    lastAppliedStateAtRef.current = 0;
+    anchorRef.current = null;
+    stallSampleRef.current = null;
+    lastSeekAtRef.current = 0;
+    cancelScheduledPlay();
+    setSyncFactor(1);
+    showNotice(null);
+  }, [src.url, mediaKey, inRoom]);
+  useEffect(
+    () => () => {
+      cancelScheduledPlay();
+      bridgeRef.current?.setSyncRateFactor?.(1);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!inRoom) return;
     return onIncomingState((state) => {
       if (state.updatedBy === clientId) return;
+      if (isHostRef.current) return;
       if (cast?.activeRef.current) return;
       const b = bridgeRef.current;
       if (!b) return;
@@ -232,50 +291,198 @@ export function useRoomSync(params: {
         return;
       }
       if (!state.mediaId) return;
+      // Before the start the lobby owns the guest's player ("Play without sync" included).
+      if (!roomStartedRef.current) return;
       if (state.updatedAt < lastAppliedStateAtRef.current) return;
       lastAppliedStateAtRef.current = state.updatedAt;
-      const rate = syncRate(state);
-      if (Math.abs(rate - rateRef.current) > 0.01) {
-        b.setRate(rate);
+      const now = Date.now();
+      // The cause on the first state a viewer sees is old news from before it arrived.
+      const cause = state.cause;
+      const firstState = lastCauseIdRef.current === undefined;
+      if (firstState || (cause && cause.id !== lastCauseIdRef.current)) {
+        lastCauseIdRef.current = cause?.id ?? null;
+        if (
+          cause &&
+          !firstState &&
+          cause.by !== clientId &&
+          now - (state.sampledAt ?? state.updatedAt) < ACTIVITY_FRESH_MS
+        )
+          setActivity({
+            by: cause.by,
+            action: cause.action,
+            positionSeconds: cause.action === "seek" ? state.positionSeconds : undefined,
+            at: now,
+          });
       }
+
+      // Hosts that predate buffering reports repeat a frozen "playing"
+      // position while they wait for data; treat that as stopped.
+      let stalled = false;
+      if (typeof state.buffering !== "boolean") {
+        const sample = { positionSeconds: state.positionSeconds, at: now, playing: state.playing };
+        const first = stallSampleRef.current;
+        stalled = isHostStalled(first, sample);
+        if (
+          !first ||
+          first.playing !== sample.playing ||
+          Math.abs(sample.positionSeconds - first.positionSeconds) >= STALL_MAX_MOVE_S
+        )
+          stallSampleRef.current = sample;
+      } else stallSampleRef.current = null;
+
+      const anchor = anchorFromState(state, stalled);
+      anchorRef.current = anchor;
+      const hostRate = safeRate(state.speed);
+      if (Math.abs(hostRate - rateRef.current) > 0.01) b.setRate(hostRate);
+      if (anchor.playing && isScheduled(state, now)) {
+        schedulePlay(anchor, b);
+        return;
+      }
+      cancelScheduledPlay();
+      // Current hosts say so (buffering, not playing); older ones keep "playing" but stall.
+      const hostBuffering = state.buffering === true || (state.playing && !anchor.playing);
+      showNotice(hostBuffering ? { kind: "host-buffering" } : null);
+
       const livePos = getPlaybackPosition();
-      const target = syncTarget(state, durationRef.current);
-      const drift = Math.abs(livePos - target);
-      const playStateChanged = state.playing !== (snap.status === "playing");
-      const driftTooBig = drift > SYNC_DRIFT_TOLERANCE_S;
+      const playing = statusRef.current === "playing";
       if (syncCatchUpRef.current) {
+        const drift = Math.abs(livePos - seekTarget(anchor, now, durationRef.current));
         if (drift < SYNC_SEEK_JUMP_S) {
           const buffered = getPlaybackBuffered();
-          const playing = snap.status === "playing";
-          const nearEof = snap.durationSec > 0 && livePos + buffered >= snap.durationSec - 0.5;
+          const nearEof =
+            durationRef.current > 0 && livePos + buffered >= durationRef.current - 0.5;
           if (!playing || (buffered < 2.0 && !nearEof)) {
-            if (state.playing !== playing) {
-              if (state.playing && !playing) b.play({ reason: "room" }).catch(() => {});
-              if (!state.playing && playing) b.pause("room");
+            if (anchor.playing !== playing) {
+              if (anchor.playing && !playing) b.play({ reason: "room" }).catch(() => {});
+              if (!anchor.playing && playing) b.pause("room");
             }
             return;
           }
         }
         syncCatchUpRef.current = false;
       }
-      if (!playStateChanged && !driftTooBig) return;
-      if (playStateChanged || driftTooBig) {
-        b.seek(target);
-        if (driftTooBig) syncCatchUpRef.current = true;
+
+      if (!anchor.playing) {
+        // Everyone stops on the frame where the host stopped (as SharePlay does);
+        // the jump happens while paused, so nothing is shown twice.
+        setSyncFactor(1);
+        if (playing) b.pause("room");
+        const target = expectedPosition(anchor, now, durationRef.current);
+        if (Math.abs(livePos - target) > PAUSE_SNAP_S) b.seek(target);
+        return;
       }
-      if (state.playing && snap.status !== "playing") b.play({ reason: "room" }).catch(() => {});
-      if (!state.playing && snap.status === "playing") b.pause("room");
+      if (!playing) {
+        if (
+          Math.abs(expectedPosition(anchor, now, durationRef.current) - livePos) > RESUME_SEEK_S
+        ) {
+          b.seek(seekTarget(anchor, now, durationRef.current));
+          lastSeekAtRef.current = now;
+        }
+        b.play({ reason: "room" }).catch(() => {});
+        return;
+      }
+      correct(anchor, b);
     });
-  }, [
-    inRoom,
-    onIncomingState,
-    clientId,
-    mediaKey,
-    suppressOutgoingFor,
-    snap.status,
-    snap.durationSec,
-    cast,
-  ]);
+  }, [inRoom, onIncomingState, clientId, mediaKey, suppressOutgoingFor, cast]);
+
+  // Between host states the guest keeps closing small gaps on its own.
+  useEffect(() => {
+    if (!inRoom || isHost || !hasStarted) return;
+    const id = window.setInterval(() => {
+      if (cast?.activeRef.current) return;
+      const anchor = anchorRef.current;
+      const b = bridgeRef.current;
+      if (!anchor || !b || scheduledPlayRef.current != null) return;
+      // With the host gone the last anchor goes stale; never chase it.
+      if (hostAwayRef.current || !anchor.playing || statusRef.current !== "playing") {
+        setSyncFactor(1);
+        return;
+      }
+      if (syncCatchUpRef.current) {
+        const live = getPlaybackPosition();
+        const buffered = getPlaybackBuffered();
+        const nearEof = durationRef.current > 0 && live + buffered >= durationRef.current - 0.5;
+        if (buffered < 2.0 && !nearEof) return;
+        syncCatchUpRef.current = false;
+      }
+      correct(anchor, b);
+    }, GUEST_CORRECTION_TICK_MS);
+    return () => {
+      window.clearInterval(id);
+      setSyncFactor(1);
+    };
+  }, [inRoom, isHost, hasStarted, mediaKey, cast]);
+
+  // The host dropped and asked the room to wait for it: hold on the current frame.
+  useEffect(() => {
+    if (!inRoom || isHost || !hasStarted || !roomSnapshot.hostAway) return;
+    if (roomSnapshot.syncState?.waitOnDrop !== true) return;
+    if (statusRef.current === "playing") bridgeRef.current?.pause("room-hold");
+  }, [inRoom, isHost, hasStarted, roomSnapshot.hostAway]);
+
+  /** A guest's "Keep watching" while the host is away: take over and carry on. */
+  const keepWatching = () => {
+    skipDroppedRef.current = true;
+    claimHost?.(false);
+    bridgeRef.current?.play({ reason: "room-hold" }).catch(() => {});
+  };
+
+  // Tell the room when this guest is stuck buffering, so the host can wait (relay v12+),
+  // and how far it is from the host when that is more than anyone could miss (v13+).
+  const statusSupported = (roomSnapshot.relayVersion ?? 0) >= RELAY_SYNC_STATUS_VERSION;
+  const offsetSupported = (roomSnapshot.relayVersion ?? 0) >= RELAY_SOCIAL_VERSION;
+  useEffect(() => {
+    if (!inRoom || isHost || !hasStarted || !statusSupported || !sendStatus) return;
+    let sent: ParticipantSyncPhase | null = null;
+    let sentOffset = 0;
+    let candidate: { value: number; since: number } | null = null;
+    let bufferingSince: number | null = null;
+    const measureOffset = (now: number): number | null => {
+      const anchor = anchorRef.current;
+      if (!anchor || scheduledPlayRef.current != null || bufferingRef.current) return null;
+      if (now - lastSeekAtRef.current < SEEK_SETTLE_MS) return null;
+      return reportedOffset(
+        getPlaybackPosition() - expectedPosition(anchor, now, durationRef.current),
+      );
+    };
+    const tick = () => {
+      if (cast?.activeRef.current) return;
+      const now = Date.now();
+      let offsetToSend: number | null = null;
+      if (offsetSupported) {
+        const value = measureOffset(now);
+        if (value == null || value === sentOffset) candidate = null;
+        else if (!candidate || candidate.value !== value) candidate = { value, since: now };
+        else if (now - candidate.since >= OFFSET_STEADY_MS) offsetToSend = value;
+      }
+      let next = sent;
+      if (bufferingRef.current && statusRef.current === "playing") {
+        bufferingSince ??= now;
+        if (now - bufferingSince >= BUFFERING_REPORT_MS) next = "buffering";
+      } else {
+        bufferingSince = null;
+        if (sent === "buffering") {
+          const live = getPlaybackPosition();
+          const buffered = getPlaybackBuffered();
+          const nearEof = durationRef.current > 0 && live + buffered >= durationRef.current - 0.5;
+          if (buffered >= READY_BUFFER_S || nearEof) next = "ready";
+        }
+      }
+      if (offsetToSend != null) {
+        sentOffset = offsetToSend;
+        candidate = null;
+      }
+      if ((next && next !== sent) || offsetToSend != null) {
+        sent = next ?? "ready";
+        sendStatus(sent, offsetSupported ? sentOffset : undefined);
+      }
+    };
+    const id = window.setInterval(tick, GUEST_CORRECTION_TICK_MS);
+    return () => {
+      window.clearInterval(id);
+      if (sent === "buffering" || sentOffset !== 0) sendStatus("ready");
+    };
+  }, [inRoom, isHost, hasStarted, statusSupported, offsetSupported, sendStatus, mediaKey, cast]);
 
   useEffect(() => {
     if (!inRoom || !cast) return;
@@ -300,46 +507,6 @@ export function useRoomSync(params: {
       if (!state.playing && playing) void cast.pause();
     });
   }, [inRoom, cast, onIncomingState, clientId, mediaKey, suppressOutgoingFor, setForeignNotice]);
-
-  useEffect(() => {
-    if (!inRoom || !isHost || !cast) return;
-    const publishCast = () => {
-      if (!cast.activeRef.current) return;
-      const pos = cast.getPosition();
-      const playing = cast.isPlaying();
-      if (durationRef.current <= 0) return;
-      if (pos <= 0 && playing) return;
-      publishedRef.current = {
-        status: playing ? "playing" : "paused",
-        positionSec: pos,
-        at: Date.now(),
-      };
-      publishState({
-        mediaId: src.meta.id,
-        mediaTitle: src.meta.name ?? null,
-        episode: src.episode
-          ? { season: src.episode.season, episode: src.episode.episode, name: src.episode.name }
-          : null,
-        posterUrl: src.meta.poster ?? null,
-        positionSeconds: pos,
-        playing,
-        source: hostSourceRef.current ?? undefined,
-        guestPick: guestPickRef.current || undefined,
-      });
-    };
-    publishCast();
-    const id = window.setInterval(publishCast, 3000);
-    return () => window.clearInterval(id);
-  }, [
-    inRoom,
-    isHost,
-    cast,
-    publishState,
-    src.meta.id,
-    src.meta.name,
-    src.meta.poster,
-    src.episode,
-  ]);
 
   const prevMediaKeyRef = useRef(mediaKey);
   useEffect(() => {
@@ -386,39 +553,6 @@ export function useRoomSync(params: {
     roomSnapshot.hostClientId,
   ]);
 
-  const lobbySeededRef = useRef(false);
-  useEffect(() => {
-    lobbySeededRef.current = false;
-  }, [mediaKey]);
-  useEffect(() => {
-    if (!inRoom || !isHost || hasStarted || lobbySeededRef.current) return;
-    if (snap.durationSec <= 0) return;
-    lobbySeededRef.current = true;
-    publishState({
-      mediaId: src.meta.id,
-      mediaTitle: src.meta.name ?? null,
-      episode: src.episode
-        ? { season: src.episode.season, episode: src.episode.episode, name: src.episode.name }
-        : null,
-      posterUrl: src.meta.poster ?? null,
-      positionSeconds: getPlaybackPosition(),
-      playing: false,
-      speed: rateRef.current,
-      source: hostSourceRef.current ?? undefined,
-      guestPick: guestPickRef.current || undefined,
-    });
-  }, [
-    inRoom,
-    isHost,
-    hasStarted,
-    snap.durationSec,
-    publishState,
-    src.meta.id,
-    src.meta.name,
-    src.meta.poster,
-    src.episode,
-  ]);
-
   useEffect(() => {
     if (!inRoom || isHost || hasStarted) return;
     if (roomSnapshot.started) setHasStarted(true);
@@ -434,13 +568,34 @@ export function useRoomSync(params: {
     const b = bridgeRef.current;
     if (!b) return;
     initialSyncDoneRef.current = true;
-    const target = syncTarget(state, durationRef.current);
+    const now = Date.now();
+    const anchor = anchorFromState(state);
+    anchorRef.current = anchor;
+    lastAppliedStateAtRef.current = Math.max(lastAppliedStateAtRef.current, state.updatedAt);
     suppressOutgoingFor(SYNC_SUPPRESS_MS);
-    b.setRate(syncRate(state));
-    b.seek(target);
-    if (state.playing) b.play({ reason: "room" }).catch(() => {});
+    b.setRate(safeRate(state.speed));
+    if (anchor.playing && isScheduled(state, now)) {
+      schedulePlay(anchor, b);
+      return;
+    }
+    b.seek(seekTarget(anchor, now, durationRef.current));
+    lastSeekAtRef.current = now;
+    if (anchor.playing) b.play({ reason: "room" }).catch(() => {});
     else b.pause("room");
   }, [inRoom, isHost, hasStarted, roomSnapshot.syncState, mediaKey, suppressOutgoingFor]);
 
-  return { inRoomRef, isHostRef, initialSyncDoneRef };
+  return {
+    inRoomRef,
+    isHostRef,
+    initialSyncDoneRef,
+    startTogether,
+    // The host's own countdown, or the guest's.
+    syncNotice:
+      isHost && countdownAt != null ? { kind: "countdown" as const, at: countdownAt } : notice,
+    waitingFor,
+    skipWaiting,
+    keepWatching,
+    activity,
+    noteLocalAction,
+  };
 }

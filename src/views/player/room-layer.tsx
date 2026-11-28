@@ -1,12 +1,22 @@
 import { memo, useMemo } from "react";
 import { AvatarDock } from "@/components/player/avatar-dock";
 import { ChatOverlay } from "@/components/player/chat-overlay";
+import { ReactionLayer } from "@/components/player/reaction-layer";
 import type { PanelCorner } from "@/lib/player-chrome";
 import type { RoomSnapshot } from "@/lib/together/client";
 import type { ChatMessage } from "@/lib/together/provider";
-import type { ParticipantLocation, SourceDescriptor, SyncState } from "@/lib/together/protocol";
+import type {
+  ParticipantLocation,
+  ReactionEmoji,
+  SourceDescriptor,
+  SyncState,
+} from "@/lib/together/protocol";
+import { reactionSide } from "@/lib/together/reactions";
+import type { FloatingReaction } from "./hooks/use-floating-reactions";
 import { DurationMismatchChip } from "./duration-mismatch-chip";
 import { ForeignNoticeBox } from "./foreign-notice-box";
+import { RoomActivityNotice, type RoomActivityNoticeInfo } from "./room-activity-notice";
+import { RoomSyncPill, type RoomSyncPillNotice } from "./room-sync-pill";
 import { WaitingForRoom } from "./waiting-for-room";
 
 export const RoomLayer = memo(function RoomLayer({
@@ -17,6 +27,8 @@ export const RoomLayer = memo(function RoomLayer({
   clientId,
   hostClientId,
   syncState,
+  participantStatus,
+  participantOffset,
   avatarsVisible,
   presenceMap,
   participantLocations,
@@ -25,6 +37,8 @@ export const RoomLayer = memo(function RoomLayer({
   avatarsHidden,
   chat,
   sendChat,
+  onReact,
+  reactions,
   chromeVisible,
   chatCorner,
   chatHidden,
@@ -43,6 +57,12 @@ export const RoomLayer = memo(function RoomLayer({
   onFindCloser,
   foreignNotice,
   onDismissForeign,
+  syncNotice,
+  onKeepWatching,
+  activityNotice,
+  belowStreamCheck = false,
+  autoStartAt,
+  onCancelAutoStart,
 }: {
   inRoom: boolean;
   pipMode: boolean;
@@ -51,6 +71,8 @@ export const RoomLayer = memo(function RoomLayer({
   clientId: string;
   hostClientId: string | null;
   syncState: SyncState | null;
+  participantStatus: RoomSnapshot["participantStatus"];
+  participantOffset: RoomSnapshot["participantOffset"];
   avatarsVisible: boolean;
   presenceMap: Map<string, number>;
   participantLocations: Map<string, ParticipantLocation>;
@@ -59,6 +81,8 @@ export const RoomLayer = memo(function RoomLayer({
   avatarsHidden: boolean;
   chat: ChatMessage[];
   sendChat: (text: string) => void;
+  onReact?: (emoji: ReactionEmoji) => void;
+  reactions: FloatingReaction[];
   chromeVisible: boolean;
   chatCorner: PanelCorner;
   chatHidden: boolean;
@@ -77,6 +101,13 @@ export const RoomLayer = memo(function RoomLayer({
   onFindCloser: () => void;
   foreignNotice: { title: string | null; from: string } | null;
   onDismissForeign: () => void;
+  syncNotice: RoomSyncPillNotice | null;
+  onKeepWatching?: () => void;
+  activityNotice: RoomActivityNoticeInfo | null;
+  /** The "Does this stream look right?" prompt holds the top centre; sit under it. */
+  belowStreamCheck?: boolean;
+  autoStartAt: number | null;
+  onCancelAutoStart: () => void;
 }) {
   const everyoneReady = useMemo(
     () => participants.length > 0 && participants.every((p) => p.ready),
@@ -91,6 +122,8 @@ export const RoomLayer = memo(function RoomLayer({
           selfId={clientId}
           hostId={hostClientId}
           syncState={syncState}
+          participantStatus={participantStatus}
+          participantOffset={participantOffset}
           visible={avatarsVisible}
           presenceMap={presenceMap}
           participantLocations={participantLocations}
@@ -104,12 +137,17 @@ export const RoomLayer = memo(function RoomLayer({
         <ChatOverlay
           messages={chat}
           onSend={sendChat}
+          onReact={onReact}
           selfId={clientId}
           participants={participants}
           forceVisible={chromeVisible}
           corner={chatCorner}
           hidden={chatHidden}
         />
+      )}
+
+      {inRoom && !pipMode && (
+        <ReactionLayer reactions={reactions} side={reactionSide(chatCorner)} />
       )}
 
       {showWaiting && (
@@ -124,7 +162,20 @@ export const RoomLayer = memo(function RoomLayer({
           onStart={onStart}
           onPlayWithoutSync={onPlayWithoutSync}
           onLeave={onLeave}
+          autoStartAt={autoStartAt}
+          onCancelAutoStart={onCancelAutoStart}
         />
+      )}
+
+      {inRoom && !showWaiting && !pipMode && (syncNotice || activityNotice) && (
+        <div
+          className={`pointer-events-none absolute left-1/2 z-30 flex max-w-[calc(100%-32px)] -translate-x-1/2 flex-col items-center gap-2 transition-[top] duration-300 ${
+            belowStreamCheck ? "top-28" : "top-20"
+          }`}
+        >
+          {syncNotice && <RoomSyncPill notice={syncNotice} onKeepWatching={onKeepWatching} />}
+          {activityNotice && <RoomActivityNotice notice={activityNotice} />}
+        </div>
       )}
 
       {!pipMode && !drawMode && (

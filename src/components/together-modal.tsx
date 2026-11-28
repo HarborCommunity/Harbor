@@ -13,7 +13,13 @@ import { Tooltip } from "@/views/detail/tooltip";
 import { Avatar } from "./together-modal/avatar";
 import { ChatPanel } from "./together-modal/chat-panel";
 import { ChatHistoryToggle } from "./together-modal/chat-history-toggle";
-import { GuestPickToggle } from "./together-modal/guest-pick-toggle";
+import { RELAY_SYNC_STATUS_VERSION } from "@/lib/together/protocol";
+import {
+  AutoStartToggle,
+  DropPolicySelect,
+  GuestPickToggle,
+  HostOnlyToggle,
+} from "./together-modal/guest-pick-toggle";
 import { InvitePanel } from "./together-modal/invite-panel";
 import { ReturnToVideo } from "./together-modal/return-to-video";
 import { ListenTogetherCta } from "./together-modal/listen-together-cta";
@@ -442,6 +448,13 @@ export function TogetherPopover({
             />
 
             {snapshot.hostClientId === clientId && <GuestPickToggle />}
+            {snapshot.hostClientId === clientId && <AutoStartToggle />}
+            {snapshot.hostClientId === clientId && <HostOnlyToggle />}
+            {snapshot.hostClientId === clientId && (
+              <DropPolicySelect
+                supported={(snapshot.relayVersion ?? 0) >= RELAY_SYNC_STATUS_VERSION}
+              />
+            )}
 
             <ChatHistoryToggle />
 

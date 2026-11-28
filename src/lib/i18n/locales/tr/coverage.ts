@@ -1,4 +1,23 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} bağlantıyı kaybetti. Dönmesi bekleniyor…",
+  "When someone drops": "Biri düştüğünde",
+  "Keep playing": "Oynatmaya devam et",
+  "Always wait": "Her zaman bekle",
+  "Everyone else carries on": "Diğerleri izlemeye devam eder",
+  "Pauses and waits in rooms of up to 3 people": "En fazla 3 kişilik odalarda duraklatıp bekler",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Duraklatır ve dönmeleri için 2 dakikaya kadar bekler",
+  "Waiting for {names} to reconnect…": "{names} yeniden bağlanana kadar bekleniyor…",
+  "Rejoin watch party": "İzleme partisine yeniden katıl",
+  Rejoin: "Yeniden katıl",
+  "Update your relay to use this": "Bunu kullanmak için aktarıcını güncelle",
+  "Waiting for {names} to load…": "{names} yüklenene kadar bekleniyor…",
+  "Start when everyone is ready": "Herkes hazır olunca başlat",
+  "Counts down, then plays for the room": "Geri sayar, ardından oda için oynatır",
+  "Starting in {n}… Cancel": "{n} içinde başlıyor… İptal",
+  "Starting together in {n}…": "{n} saniye içinde birlikte başlıyor…",
+  "Waiting for {name} to load…": "{name} yüklenene kadar bekleniyor…",
   "Waiting for {name}…": "{name} bekleniyor…",
   "Keeping the source you were watching.": "İzlediğiniz kaynak korunuyor.",
   "Sound descriptions": "Ses açıklamaları",
@@ -943,6 +962,22 @@ const coverage: Record<string, string> = {
     "HDR kaynaklarını SDR'ye dönüştürür. Gömülü oynatma ve SDR ekranlarla çalışır.",
   "Uses mpv's native window and automatic Wayland color management (mpv 0.41 or newer recommended). Requires a compatible GPU driver, compositor and HDR-enabled display. X11 falls back to SDR. Restart playback to apply.":
     "mpv'nin yerel penceresini ve Wayland'ın otomatik renk yönetimini kullanır (mpv 0.41 veya daha yenisi önerilir). Uyumlu bir GPU sürücüsü, bir birleştirici ve HDR etkin bir ekran gerektirir. X11'de SDR'ye geri dönülür. Değişikliği uygulamak için oynatmayı yeniden başlatın.",
+  "Only I control playback": "Oynatmayı yalnızca ben kontrol ederim",
+  "Guests can't play, pause or skip": "Konuklar oynatamaz, duraklatamaz veya atlayamaz",
+  "{name} locked playback": "{name} oynatmayı kilitledi",
+  "{name} unlocked playback": "{name} oynatma kilidini açtı",
+  "Only {name} can control playback": "Oynatmayı yalnızca {name} kontrol edebilir",
+  "{name} paused": "{name} duraklattı",
+  "{name} resumed": "{name} devam ettirdi",
+  "{name} skipped to {time}": "{name} {time} anına atladı",
+  "{name} skipped": "{name} atladı",
+  React: "Tepki ver",
+  Reactions: "Tepkiler",
+  " · loading": " · yükleniyor",
+  " · {n}s behind": " · {n} sn geride",
+  " · {n}s ahead": " · {n} sn önde",
+  "−{n}s": "−{n} sn",
+  "+{n}s": "+{n} sn",
 };
 
 export default coverage;

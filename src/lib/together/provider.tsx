@@ -26,11 +26,14 @@ import type {
   IncomingHostLeaving,
   IncomingInvite,
   IncomingParticipantLeft,
+  IncomingReaction,
   IncomingSummon,
   PartialSyncState,
   RemoteCursor,
 } from "./provider-types";
 import { createCommandSender } from "./seek-coalesce";
+import { clearSavedRoom, type SavedRoom } from "./rejoin";
+import { useRejoinOffer } from "./use-rejoin-offer";
 import {
   clearInviteParams,
   emitTogetherInvite,
@@ -43,7 +46,9 @@ import {
   generateRoomCode,
   normalizeRoomCode,
   type ParticipantLocation,
+  type ParticipantSyncPhase,
   type PlayInvite,
+  type ReactionEmoji,
   type RoomCommand,
   type SummonTarget,
   type SyncState,
@@ -58,6 +63,7 @@ export type {
   IncomingHostLeaving,
   IncomingInvite,
   IncomingParticipantLeft,
+  IncomingReaction,
   IncomingSummon,
   PartialSyncState,
   RemoteCursor,
@@ -103,6 +109,17 @@ type TogetherValue = {
   hostLocation: ParticipantLocation | null;
   suppressOutgoingFor: (ms: number) => void;
   onIncomingState: (cb: (state: SyncState) => void) => () => void;
+  /** Reports this viewer's watch-party sync phase (relay v12+) and distance from the host (v13+). */
+  sendStatus: (phase: ParticipantSyncPhase, offset?: number) => void;
+  /** Sends a reaction to everyone else in the room (relay v13+). */
+  sendReaction: (emoji: ReactionEmoji) => void;
+  onReaction: (cb: (e: IncomingReaction) => void) => () => void;
+  /** The media key playing in this window, or null; see TogetherClient.setActivePlayback. */
+  setActivePlayback: (key: string | null) => void;
+  /** A room the previous session was in (after a crash or restart), offered once. */
+  rejoinOffer: SavedRoom | null;
+  acceptRejoin: () => void;
+  dismissRejoin: () => void;
   modalOpen: boolean;
   modalOwner: string | null;
   openModal: (owner: string) => void;
@@ -176,6 +193,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
   const stateListenersRef = useRef<Set<(s: SyncState) => void>>(new Set());
   const commandListenersRef = useRef<Set<(from: string, c: RoomCommand) => void>>(new Set());
   const drawListenersRef = useRef<Set<(e: IncomingDraw) => void>>(new Set());
+  const reactionListenersRef = useRef<Set<(e: IncomingReaction) => void>>(new Set());
   const lastInviteRef = useRef<LastInviteMeta | null>(null);
   const guestPickSettingRef = useRef(settings.togetherGuestsPick);
   guestPickSettingRef.current = settings.togetherGuestsPick;
@@ -191,7 +209,11 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
     started: false,
     relayVersion: null,
     lastError: null,
+    participantStatus: {},
+    participantOffset: {},
+    hostAway: false,
   });
+  const activePlaybackRef = useRef<string | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [modalOwner, setModalOwner] = useState<string | null>(null);
   const modalOpen = modalOwner !== null;
@@ -231,6 +253,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       avatarRef.current,
       colorRef.current,
     );
+    c.setActivePlayback(activePlaybackRef.current);
     clientRef.current = c;
     const off = c.on((e: RoomEvent) =>
       applyRoomEvent(e, {
@@ -238,6 +261,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
         stateListenersRef,
         commandListenersRef,
         drawListenersRef,
+        reactionListenersRef,
         lastInviteRef,
         setSnapshot,
         setCursorMap,
@@ -256,6 +280,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       stateListenersRef.current.clear();
       commandListenersRef.current.clear();
       drawListenersRef.current.clear();
+      reactionListenersRef.current.clear();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [relayUrl]);
@@ -323,6 +348,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
 
   const leaveSession = useCallback(() => {
     setChat([]);
+    clearSavedRoom();
     clientRef.current?.leave();
   }, []);
 
@@ -462,6 +488,47 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Closing the app or page is leaving, not a dropped connection: say so, so a
+  // room that waits for people who drop doesn't hold for someone who quit. The
+  // saved room stays, so a restart can still offer to rejoin.
+  useEffect(() => {
+    const onPageHide = (e: PageTransitionEvent) => {
+      if (!e.persisted) clientRef.current?.leave();
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, []);
+  const joinFromRejoin = useCallback((room: string) => {
+    setChat([]);
+    clientRef.current?.join(room);
+  }, []);
+  const { rejoinOffer, acceptRejoin, dismissRejoin } = useRejoinOffer({
+    relayUrl,
+    snapshot,
+    pendingInvite,
+    join: joinFromRejoin,
+  });
+
+  const sendStatus = useCallback((phase: ParticipantSyncPhase, offset?: number) => {
+    clientRef.current?.sendStatus(phase, offset);
+  }, []);
+
+  const sendReaction = useCallback((emoji: ReactionEmoji) => {
+    clientRef.current?.sendReaction(emoji);
+  }, []);
+
+  const onReaction = useCallback((cb: (e: IncomingReaction) => void) => {
+    reactionListenersRef.current.add(cb);
+    return () => {
+      reactionListenersRef.current.delete(cb);
+    };
+  }, []);
+
+  const setActivePlayback = useCallback((key: string | null) => {
+    activePlaybackRef.current = key;
+    clientRef.current?.setActivePlayback(key);
+  }, []);
+
   const wasInvitedTo = useCallback((key: string): boolean => {
     const r = lastInviteRef.current;
     return !!r && r.key === key && Date.now() - r.at < 60_000;
@@ -509,6 +576,13 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       hostLocation,
       suppressOutgoingFor,
       onIncomingState,
+      sendStatus,
+      sendReaction,
+      onReaction,
+      setActivePlayback,
+      rejoinOffer,
+      acceptRejoin,
+      dismissRejoin,
       modalOpen,
       modalOwner,
       openModal,
@@ -559,6 +633,13 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       hostLocation,
       suppressOutgoingFor,
       onIncomingState,
+      sendStatus,
+      sendReaction,
+      onReaction,
+      setActivePlayback,
+      rejoinOffer,
+      acceptRejoin,
+      dismissRejoin,
       modalOpen,
       modalOwner,
       openModal,

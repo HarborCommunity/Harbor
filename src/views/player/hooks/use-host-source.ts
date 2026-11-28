@@ -17,6 +17,7 @@ export function useHostSource(params: {
   liveStreamRef: PlayerStreamRef | undefined;
   snap: PlayerSnapshot;
   guestPickRef: RefObject<boolean>;
+  hostOnlyRef?: RefObject<boolean>;
   publishState: (state: PartialSyncState) => void;
 }): { hostSourceRef: RefObject<SourceDescriptor | null> } {
   const {
@@ -28,6 +29,7 @@ export function useHostSource(params: {
     liveStreamRef,
     snap,
     guestPickRef,
+    hostOnlyRef,
     publishState,
   } = params;
 
@@ -81,6 +83,7 @@ export function useHostSource(params: {
       speed: snap.rate,
       source: descriptor,
       guestPick: guestPickRef.current || undefined,
+      hostOnly: hostOnlyRef?.current || undefined,
     });
   }, [
     inRoom,

@@ -1,10 +1,10 @@
-import { History, MessageCircle, Send } from "lucide-react";
+import { History, MessageCircle, Send, SmilePlus } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { nameColor } from "@/lib/together/colors";
 import { groupOverlayMessages, overlayMessages } from "@/lib/together/chat-overlay-messages";
 import type { PanelCorner } from "@/lib/player-chrome";
 import type { ChatMessage } from "@/lib/together/provider";
-import type { Participant } from "@/lib/together/protocol";
+import { REACTION_EMOJI, type Participant, type ReactionEmoji } from "@/lib/together/protocol";
 import { useSelfIdentity } from "@/lib/together/use-self-identity";
 import { useT } from "@/lib/i18n";
 import { registerChatHistoryDismiss } from "@/lib/together/chat-history-dismiss";
@@ -12,6 +12,8 @@ import { useSettings } from "@/lib/settings";
 
 const COMPOSE_TIMEOUT_MS = 4500;
 const STICK_TO_BOTTOM_PX = 24;
+/** The reaction row closes this long after the last tap. */
+const REACT_IDLE_MS = 5000;
 
 const CORNER_POSITION: Record<PanelCorner, string> = {
   "top-left": "top-20 left-6 items-start",
@@ -28,9 +30,12 @@ export function ChatOverlay({
   forceVisible,
   corner = "bottom-left",
   hidden = false,
+  onReact,
 }: {
   messages: ChatMessage[];
   onSend: (text: string) => void;
+  /** Present only when the relay passes reactions on. */
+  onReact?: (emoji: ReactionEmoji) => void;
   selfId: string;
   participants: Participant[];
   forceVisible: boolean;
@@ -46,6 +51,9 @@ export function ChatOverlay({
   const [historyOpen, setHistoryOpen] = useState(keepHistoryOpen);
   const [tickNow, setTickNow] = useState(() => Date.now());
   const inputRef = useRef<HTMLInputElement>(null);
+  const [reacting, setReacting] = useState(false);
+  const [reactTouchedAt, setReactTouchedAt] = useState(0);
+  const firstReactionRef = useRef<HTMLButtonElement>(null);
   const composeTimer = useRef<number | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const stickToBottom = useRef(true);
@@ -86,6 +94,19 @@ export function ChatOverlay({
   }, [historyOpen, keepHistoryOpen, hidden]);
 
   useEffect(() => {
+    if (!reacting || hidden) return;
+    return registerChatHistoryDismiss(() => setReacting(false));
+  }, [reacting, hidden]);
+  useEffect(() => {
+    if (!reacting) return;
+    const id = window.setTimeout(() => setReacting(false), REACT_IDLE_MS);
+    return () => window.clearTimeout(id);
+  }, [reacting, reactTouchedAt]);
+  useEffect(() => {
+    if (!onReact) setReacting(false);
+  }, [onReact]);
+
+  useEffect(() => {
     const el = listRef.current;
     if (!historyOpen || !el) return;
     stickToBottom.current = true;
@@ -122,7 +143,7 @@ export function ChatOverlay({
     [messages, tickNow, historyOpen],
   );
   const grouped = useMemo(() => groupOverlayMessages(visible), [visible]);
-  const showStream = visible.length > 0 || forceVisible || composing;
+  const showStream = visible.length > 0 || forceVisible || composing || reacting;
   const align = corner.endsWith("right") ? "items-end" : "items-start";
 
   const submit = () => {
@@ -205,6 +226,66 @@ export function ChatOverlay({
             <MessageCircle size={11} strokeWidth={2.4} />
             {t("Press T")}
           </button>
+          {onReact && (
+            <button
+              onClick={() => {
+                setReacting((open) => !open);
+                setReactTouchedAt(Date.now());
+                setTimeout(() => firstReactionRef.current?.focus({ preventScroll: true }), 30);
+              }}
+              aria-expanded={reacting}
+              aria-label={t("React")}
+              title={t("React")}
+              className={`flex h-[30px] w-[30px] items-center justify-center rounded-full border border-white/12 backdrop-blur-md transition-colors hover:bg-black/65 hover:text-white ${
+                reacting ? "bg-white/20 text-white" : "bg-black/45 text-white/65"
+              }`}
+            >
+              <SmilePlus size={13} strokeWidth={2.2} />
+            </button>
+          )}
+          {onReact && reacting && (
+            <div
+              role="group"
+              aria-label={t("Reactions")}
+              onKeyDown={(e) => {
+                // The player's window shortcuts own Space and the arrows; inside the row
+                // Space reacts with the focused button and the arrows move between them.
+                if (![" ", "ArrowLeft", "ArrowRight", "Home", "End"].includes(e.key)) return;
+                e.stopPropagation();
+                // TV spatial navigation (a capture listener) may already have moved focus.
+                if (e.key === " " || e.defaultPrevented) return;
+                e.preventDefault();
+                const buttons = [...e.currentTarget.querySelectorAll("button")];
+                const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+                const last = buttons.length - 1;
+                const next =
+                  e.key === "Home"
+                    ? 0
+                    : e.key === "End"
+                      ? last
+                      : e.key === "ArrowLeft"
+                        ? Math.max(0, at - 1)
+                        : Math.min(last, at + 1);
+                buttons[next]?.focus();
+              }}
+              className="flex items-center gap-0.5 rounded-full border border-white/12 bg-black/55 px-1 py-0.5 backdrop-blur-md animate-popover-in"
+            >
+              {REACTION_EMOJI.map((emoji, i) => (
+                <button
+                  key={emoji}
+                  ref={i === 0 ? firstReactionRef : undefined}
+                  onClick={() => {
+                    onReact(emoji);
+                    setReactTouchedAt(Date.now());
+                  }}
+                  aria-label={emoji}
+                  className="flex h-7 w-7 items-center justify-center rounded-full text-[17px] transition-transform hover:scale-125 focus-visible:scale-125 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/70"
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          )}
           {messages.length > 0 && (
             <button
               onClick={() => setHistoryOpen((open) => !open)}

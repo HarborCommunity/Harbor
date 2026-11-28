@@ -11,6 +11,7 @@ import * as icons from "lucide-react";
 import * as messagesLib from "../src/lib/together/chat-overlay-messages.ts";
 import * as colors from "../src/lib/together/colors.ts";
 import * as dismiss from "../src/lib/together/chat-history-dismiss.ts";
+import * as protocol from "../src/lib/together/protocol.ts";
 
 type Msg = { from: string; name: string; text: string; at: number };
 
@@ -46,6 +47,7 @@ function setup(keepHistoryOpen: boolean, messages: Msg[], forceVisible = false) 
     "@/lib/together/colors": colors,
     "@/lib/together/chat-overlay-messages": messagesLib,
     "@/lib/together/chat-history-dismiss": dismiss,
+    "@/lib/together/protocol": protocol,
     "@/lib/together/use-self-identity": {
       useSelfIdentity: () => ({ avatar: null, color: null }),
     },
@@ -155,4 +157,70 @@ test("a hidden overlay does not take the player's Escape/Back step", () => {
   });
   assert.equal(handled, true, "showing the overlay again restores the step");
   ui.unmount();
+});
+
+test("the reaction row sends one tap each, closes with Escape/Back and stays hidden without relay support", () => {
+  const sent: string[] = [];
+  const ui = setup(false, older);
+  assert.equal(ui.doc.querySelector('[aria-label="React"]'), null, "no relay support, no button");
+  ui.rerender({ onReact: (e: string) => sent.push(e) });
+  const open = ui.doc.querySelector<HTMLButtonElement>('[aria-label="React"]')!;
+  act(() => open.click());
+  assert.equal(open.getAttribute("aria-expanded"), "true");
+  const reaction = (emoji: string) =>
+    [...ui.doc.querySelectorAll("button")].find((b) => b.getAttribute("aria-label") === emoji) ??
+    null;
+  const fire = reaction("🔥")!;
+  act(() => fire.click());
+  act(() => fire.click());
+  assert.deepEqual(sent, ["🔥", "🔥"]);
+  let handled = false;
+  act(() => {
+    handled = dismiss.dismissChatHistory();
+  });
+  assert.equal(handled, true);
+  assert.equal(reaction("🔥"), null);
+  assert.equal(dismiss.dismissChatHistory(), false);
+  ui.unmount();
+});
+
+test("Space and the arrows on the reaction row stay in the row instead of reaching the player", () => {
+  const sent: string[] = [];
+  const ui = setup(false, older);
+  ui.rerender({ onReact: (e: string) => sent.push(e) });
+  const playerKeys: string[] = [];
+  const onWindowKey = (e: KeyboardEvent) => playerKeys.push(e.key);
+  ui.doc.defaultView!.addEventListener("keydown", onWindowKey);
+  try {
+    act(() => ui.doc.querySelector<HTMLButtonElement>('[aria-label="React"]')!.click());
+    const row = [...ui.doc.querySelectorAll("button")].filter((b) =>
+      protocol.REACTION_EMOJI.includes(b.getAttribute("aria-label") as never),
+    );
+    const press = (key: string) =>
+      act(() => {
+        (ui.doc.activeElement as HTMLElement).dispatchEvent(
+          new ui.doc.defaultView!.KeyboardEvent("keydown", {
+            key,
+            bubbles: true,
+            cancelable: true,
+          }),
+        );
+      });
+    row[0].focus();
+    press("ArrowRight");
+    assert.equal(ui.doc.activeElement, row[1]);
+    press("End");
+    assert.equal(ui.doc.activeElement, row.at(-1));
+    press("ArrowRight");
+    assert.equal(ui.doc.activeElement, row.at(-1), "the last one stays put");
+    press("Home");
+    assert.equal(ui.doc.activeElement, row[0]);
+    press(" ");
+    assert.deepEqual(playerKeys, [], "the player never saw Space or the arrows");
+    press("t");
+    assert.deepEqual(playerKeys, ["t"], "other keys still reach the player");
+  } finally {
+    ui.doc.defaultView!.removeEventListener("keydown", onWindowKey);
+    ui.unmount();
+  }
 });

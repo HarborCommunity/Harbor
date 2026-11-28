@@ -1,4 +1,4 @@
-import type { PlayInvite, SummonTarget, SyncState } from "./protocol";
+import type { PlayInvite, ReactionEmoji, SummonTarget, SyncState } from "./protocol";
 
 export type ChatMessage = {
   from: string;
@@ -54,6 +54,13 @@ export type IncomingDraw = {
   y?: number;
   color?: string;
   path: string;
+};
+
+export type IncomingReaction = {
+  from: string;
+  name: string;
+  emoji: ReactionEmoji;
+  at: number;
 };
 
 export type PartialSyncState = Omit<SyncState, "updatedAt" | "updatedBy" | "hostClientId">;

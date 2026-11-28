@@ -1,4 +1,4 @@
-const WORKER_VERSION = 11;
+const WORKER_VERSION = 13;
 const MAX_AVATAR_LENGTH = 600_000;
 
 function sanitizeAvatar(v) {
@@ -146,6 +146,36 @@ async function handleProxy(req, url) {
 }
 
 const ROOM_IDLE_MS = 1000 * 60 * 60 * 6;
+// A host whose connection drops keeps the role this long, so a Wi-Fi blip
+// does not hand playback to a guest.
+const HOST_GRACE_MS = 10_000;
+// When the host chose to wait for people who drop, a crashed participant stays
+// in the room as "away" this long, so the room can wait for them to rejoin.
+const AWAY_GRACE_MS = 120_000;
+// Unchanged playback is written to storage at most this often.
+const SYNC_SAVE_MS = 10_000;
+const SYNC_PHASES = new Set(["ready", "buffering"]);
+// Reactions are a fixed set, so nothing but these few characters is relayed.
+const REACTIONS = new Set(["😂", "😮", "😍", "😢", "🔥", "👏", "💀", "👍"]);
+// Each person may send this many reactions per window; extra taps are dropped.
+const REACTION_BURST = 5;
+const REACTION_WINDOW_MS = 2_000;
+// A guest's distance from the host's timeline, in seconds, as it reports it.
+const MAX_SYNC_OFFSET_S = 3_600;
+const PLAYBACK_ACTIONS = new Set(["play", "pause", "seek"]);
+
+function sanitizeOffset(v) {
+  if (typeof v !== "number" || !isFinite(v)) return undefined;
+  return Math.round(Math.max(-MAX_SYNC_OFFSET_S, Math.min(MAX_SYNC_OFFSET_S, v)) * 10) / 10;
+}
+
+function sanitizeCause(v) {
+  if (!v || typeof v !== "object") return undefined;
+  if (typeof v.by !== "string" || v.by.length === 0 || v.by.length > 64) return undefined;
+  if (!PLAYBACK_ACTIONS.has(v.action)) return undefined;
+  if (typeof v.id !== "number" || !isFinite(v.id)) return undefined;
+  return { by: v.by, action: v.action, id: v.id };
+}
 
 function peerAttachment(p) {
   return {
@@ -154,6 +184,8 @@ function peerAttachment(p) {
     joinedAt: p.joinedAt,
     ready: p.ready,
     color: p.color,
+    status: p.status,
+    offset: p.offset,
   };
 }
 
@@ -164,16 +196,32 @@ export class Room {
     this.syncState = null;
     this.hostClientId = null;
     this.started = false;
+    this.syncStateAt = null;
+    this.lastSyncSaveAt = 0;
+    this.hostAwayUntil = null;
+    this.away = new Map();
     this.lastActivity = Date.now();
     for (const ws of state.getWebSockets()) {
       const att = ws.deserializeAttachment();
       if (att && att.clientId) this.peers.set(ws, { ...att, avatar: null, lastStateAt: 0 });
     }
     state.blockConcurrencyWhile(async () => {
-      const stored = await state.storage.get(["syncState", "hostClientId", "started"]);
+      const stored = await state.storage.get([
+        "syncState",
+        "hostClientId",
+        "started",
+        "hostAwayUntil",
+        "syncStateAt",
+        "away",
+      ]);
       this.syncState = stored.get("syncState") ?? null;
       this.hostClientId = stored.get("hostClientId") ?? null;
       this.started = stored.get("started") ?? false;
+      this.hostAwayUntil = stored.get("hostAwayUntil") ?? null;
+      // When the stored state was received, so a room woken from eviction
+      // does not hand it out as fresh.
+      this.syncStateAt = stored.get("syncStateAt") ?? null;
+      this.away = new Map(stored.get("away") ?? []);
     });
   }
 
@@ -185,8 +233,58 @@ export class Room {
     this.state.storage.put("started", this.started);
   }
   saveSync() {
-    if (this.syncState == null) this.state.storage.delete("syncState");
-    else this.state.storage.put("syncState", this.syncState);
+    this.lastSyncSaveAt = Date.now();
+    if (this.syncState == null) {
+      this.state.storage.delete("syncState");
+      this.state.storage.delete("syncStateAt");
+    } else {
+      this.state.storage.put("syncState", this.syncState);
+      if (this.syncStateAt != null) this.state.storage.put("syncStateAt", this.syncStateAt);
+    }
+  }
+  saveAway() {
+    if (this.away.size === 0) this.state.storage.delete("away");
+    else this.state.storage.put("away", [...this.away]);
+  }
+  scheduleAlarm() {
+    const due = [...this.away.values()].map((a) => a.until);
+    if (this.hostAwayUntil != null) due.push(this.hostAwayUntil);
+    if (due.length > 0) this.state.storage.setAlarm(Math.min(...due));
+    else this.state.storage.deleteAlarm();
+  }
+  isPresent(clientId) {
+    return [...this.peers.values()].some((p) => p.clientId === clientId);
+  }
+  startHostGrace() {
+    this.hostAwayUntil = Date.now() + HOST_GRACE_MS;
+    this.state.storage.put("hostAwayUntil", this.hostAwayUntil);
+    this.scheduleAlarm();
+    this.broadcast({ t: "host-away", clientId: this.hostClientId });
+  }
+  endHostGrace() {
+    if (this.hostAwayUntil == null) return;
+    this.hostAwayUntil = null;
+    this.state.storage.delete("hostAwayUntil");
+    this.scheduleAlarm();
+  }
+  async alarm() {
+    const now = Date.now();
+    let hostGone = false;
+    for (const [clientId, entry] of this.away) {
+      if (entry.until > now) continue;
+      this.away.delete(clientId);
+      this.broadcast({ t: "participant-left", clientId, name: entry.name });
+      if (clientId === this.hostClientId) hostGone = true;
+    }
+    this.saveAway();
+    if (this.hostAwayUntil != null && now >= this.hostAwayUntil) {
+      this.hostAwayUntil = null;
+      this.state.storage.delete("hostAwayUntil");
+      hostGone = true;
+    }
+    if (hostGone && !this.isPresent(this.hostClientId) && !this.away.has(this.hostClientId))
+      this.reassignHost();
+    this.scheduleAlarm();
   }
   attach(ws, peer) {
     try {
@@ -215,8 +313,11 @@ export class Room {
     this.onMessage(ws, msg);
   }
 
-  webSocketClose(ws) {
-    this.onClose(ws);
+  webSocketClose(ws, code) {
+    // 1001 is the browser or app closing the page: a quit, not a dropped
+    // connection, so nobody should be held up waiting for them.
+    if (code === 1001) this.handleLeave(ws);
+    else this.onClose(ws);
   }
 
   webSocketError(ws) {
@@ -256,6 +357,10 @@ export class Room {
         return this.handleDraw(socket, msg);
       case "presence":
         return this.handlePresence(socket, msg);
+      case "status":
+        return this.handleStatus(socket, msg);
+      case "react":
+        return this.handleReact(socket, msg);
       case "ping":
         return this.send(socket, { t: "pong", srvAt: Date.now() });
     }
@@ -269,10 +374,41 @@ export class Room {
     this.broadcast({ t: "participant-ready", clientId: peer.clientId, ready: peer.ready });
   }
 
+  handleStatus(socket, msg) {
+    const peer = this.peers.get(socket);
+    if (!peer || !SYNC_PHASES.has(msg.phase)) return;
+    const offset = sanitizeOffset(msg.offset);
+    // Nothing new to tell the room: same phase and the same distance from the host.
+    if (peer.status === msg.phase && peer.offset === offset) return;
+    peer.status = msg.phase;
+    peer.offset = offset;
+    this.attach(socket, peer);
+    this.broadcast({
+      t: "participant-status",
+      clientId: peer.clientId,
+      phase: peer.status,
+      ...(peer.offset != null && { offset: peer.offset }),
+    });
+  }
+
+  handleReact(socket, msg) {
+    const peer = this.peers.get(socket);
+    if (!peer || !REACTIONS.has(msg.emoji)) return;
+    const now = Date.now();
+    peer.reactedAt = (peer.reactedAt ?? []).filter((at) => now - at < REACTION_WINDOW_MS);
+    if (peer.reactedAt.length >= REACTION_BURST) return;
+    peer.reactedAt.push(now);
+    this.broadcast(
+      { t: "reaction", from: peer.clientId, name: peer.name, emoji: msg.emoji, at: now },
+      socket,
+    );
+  }
+
   handleClaimHost(socket, msg) {
     const peer = this.peers.get(socket);
     if (!peer) return;
     if (this.hostClientId === peer.clientId && !msg.fresh) return;
+    this.endHostGrace();
     this.hostClientId = peer.clientId;
     this.saveHost();
     this.broadcast({ t: "host", hostClientId: this.hostClientId });
@@ -387,6 +523,7 @@ export class Room {
   }
 
   reassignHost(excludeClientId) {
+    this.endHostGrace();
     let next = null;
     for (const p of this.peers.values()) {
       if (excludeClientId && p.clientId === excludeClientId) continue;
@@ -432,6 +569,20 @@ export class Room {
       this.hostClientId = peer.clientId;
       this.saveHost();
     }
+    const wasAway = this.away.delete(peer.clientId);
+    if (wasAway) {
+      this.saveAway();
+      this.scheduleAlarm();
+    }
+    const hostReturned =
+      peer.clientId === this.hostClientId && (wasAway || this.hostAwayUntil != null);
+    if (hostReturned) this.endHostGrace();
+    const statuses = {};
+    const offsets = {};
+    for (const p of this.peers.values()) {
+      if (p.status) statuses[p.clientId] = p.status;
+      if (p.offset != null) offsets[p.clientId] = p.offset;
+    }
     const participants = Array.from(this.peers.values()).map((p) => ({
       id: p.clientId,
       name: p.name,
@@ -440,6 +591,16 @@ export class Room {
       avatar: p.avatar ?? null,
       color: p.color ?? null,
     }));
+    for (const [clientId, entry] of this.away)
+      participants.push({
+        id: clientId,
+        name: entry.name,
+        joinedAt: entry.joinedAt,
+        ready: false,
+        avatar: null,
+        color: entry.color ?? null,
+        away: true,
+      });
     this.send(socket, {
       t: "joined",
       room: "",
@@ -448,6 +609,10 @@ export class Room {
       hostClientId: this.hostClientId,
       started: this.started,
       srvAt: Date.now(),
+      ...(this.syncStateAt != null && { observedAt: this.syncStateAt }),
+      statuses,
+      offsets,
+      hostAway: this.hostAwayUntil != null || this.away.has(this.hostClientId),
       relayVersion: WORKER_VERSION,
     });
     this.broadcast(
@@ -464,7 +629,8 @@ export class Room {
       },
       socket,
     );
-    if (becameHost) this.broadcast({ t: "host", hostClientId: this.hostClientId }, socket);
+    if (becameHost || hostReturned)
+      this.broadcast({ t: "host", hostClientId: this.hostClientId }, socket);
   }
 
   handleProfile(socket, msg) {
@@ -489,6 +655,8 @@ export class Room {
     const peer = this.peers.get(socket);
     if (!peer) return;
     this.peers.delete(socket);
+    // The throttle may be holding back the newest state; keep it if the room goes idle.
+    if (this.syncState && this.lastSyncSaveAt < (this.syncStateAt ?? 0)) this.saveSync();
     this.broadcast({ t: "participant-left", clientId: peer.clientId, name: peer.name });
     if (this.hostClientId === peer.clientId) this.reassignHost();
     try {
@@ -525,6 +693,11 @@ export class Room {
     if (cleanSource) s.source = cleanSource;
     else delete s.source;
     if (s.guestPick !== true) delete s.guestPick;
+    if (s.waitOnDrop !== true) delete s.waitOnDrop;
+    if (s.hostOnly !== true) delete s.hostOnly;
+    const cause = sanitizeCause(s.cause);
+    if (cause) s.cause = cause;
+    else delete s.cause;
     const isHostWrite = this.hostClientId != null && peer.clientId === this.hostClientId;
     if (this.hostClientId != null && !isHostWrite) return;
     const now = Date.now();
@@ -534,8 +707,20 @@ export class Room {
     }
     peer.lastStateAt = now;
     const stamped = { ...s, hostClientId: this.hostClientId };
+    const prev = this.syncState;
+    const changed =
+      !prev ||
+      prev.mediaId !== stamped.mediaId ||
+      prev.playing !== stamped.playing ||
+      prev.buffering !== stamped.buffering ||
+      prev.waitOnDrop !== stamped.waitOnDrop ||
+      prev.episode?.season !== stamped.episode?.season ||
+      prev.episode?.episode !== stamped.episode?.episode ||
+      // A seek while paused changes nothing else and no heartbeat moves it on.
+      (!stamped.playing && prev.positionSeconds !== stamped.positionSeconds);
     this.syncState = stamped;
-    this.saveSync();
+    this.syncStateAt = now;
+    if (changed || now - this.lastSyncSaveAt >= SYNC_SAVE_MS) this.saveSync();
     this.broadcast({ t: "state", state: stamped, srvAt: now }, socket);
   }
 
@@ -594,8 +779,31 @@ export class Room {
     const peer = this.peers.get(socket);
     if (!peer) return;
     this.peers.delete(socket);
+    // The throttle may be holding back the newest state; keep it if the room goes idle.
+    if (this.syncState && this.lastSyncSaveAt < (this.syncStateAt ?? 0)) this.saveSync();
+    if (this.peers.size === 0 && this.away.size > 0) {
+      // Nobody is left to wait; an away host must not keep the role in an empty room.
+      const hostWasAway = this.away.has(this.hostClientId);
+      this.away.clear();
+      this.saveAway();
+      this.scheduleAlarm();
+      if (hostWasAway) this.reassignHost();
+    }
+    // The host chose to wait for people who drop: keep this one in the room
+    // (and in the host role) for a while instead of announcing that they left.
+    if (this.peers.size > 0 && this.syncState?.waitOnDrop === true) {
+      const until = Date.now() + AWAY_GRACE_MS;
+      this.away.set(peer.clientId, { ...peerAttachment(peer), until });
+      this.saveAway();
+      this.scheduleAlarm();
+      this.broadcast({ t: "participant-away", clientId: peer.clientId });
+      return;
+    }
     this.broadcast({ t: "participant-left", clientId: peer.clientId, name: peer.name });
-    if (this.hostClientId === peer.clientId) this.reassignHost();
+    if (this.hostClientId === peer.clientId) {
+      if (this.peers.size > 0) this.startHostGrace();
+      else this.reassignHost();
+    }
     if (this.peers.size === 0 && Date.now() - this.lastActivity > ROOM_IDLE_MS) {
       this.syncState = null;
       this.hostClientId = null;

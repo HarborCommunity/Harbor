@@ -1,4 +1,23 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} perdeu a conexão. Aguardando o retorno…",
+  "When someone drops": "Quando alguém cai",
+  "Keep playing": "Continuar reproduzindo",
+  "Always wait": "Sempre esperar",
+  "Everyone else carries on": "Os outros continuam assistindo",
+  "Pauses and waits in rooms of up to 3 people": "Pausa e espera em salas de até 3 pessoas",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "Pausa e espera até 2 minutos pelo retorno",
+  "Waiting for {names} to reconnect…": "Aguardando {names} reconectar…",
+  "Rejoin watch party": "Voltar à sessão",
+  Rejoin: "Voltar",
+  "Update your relay to use this": "Atualize seu relay para usar isto",
+  "Waiting for {names} to load…": "Aguardando {names} carregar…",
+  "Start when everyone is ready": "Começar quando todos estiverem prontos",
+  "Counts down, then plays for the room": "Faz uma contagem regressiva e reproduz para a sala",
+  "Starting in {n}… Cancel": "Começando em {n}… Cancelar",
+  "Starting together in {n}…": "Começando juntos em {n}…",
+  "Waiting for {name} to load…": "Aguardando {name} carregar…",
   "Waiting for {name}…": "Aguardando {name}…",
   "Keeping the source you were watching.": "Mantendo a fonte que você estava assistindo.",
   "Sound descriptions": "Descrições de som",
@@ -668,6 +687,22 @@ const coverage: Record<string, string> = {
     "Converte fontes HDR para SDR. Funciona com a reprodução integrada e telas SDR.",
   "Uses mpv's native window and automatic Wayland color management (mpv 0.41 or newer recommended). Requires a compatible GPU driver, compositor and HDR-enabled display. X11 falls back to SDR. Restart playback to apply.":
     "Usa a janela nativa do mpv e o gerenciamento automático de cores do Wayland (recomenda-se mpv 0.41 ou mais recente). Requer um driver de GPU e um compositor compatíveis, além de uma tela com HDR ativado. No X11, é utilizado SDR como alternativa. Reinicie a reprodução para aplicar a alteração.",
+  "Only I control playback": "Só eu controlo a reprodução",
+  "Guests can't play, pause or skip": "Convidados não podem reproduzir, pausar nem pular",
+  "{name} locked playback": "{name} bloqueou a reprodução",
+  "{name} unlocked playback": "{name} desbloqueou a reprodução",
+  "Only {name} can control playback": "Só {name} pode controlar a reprodução",
+  "{name} paused": "{name} pausou",
+  "{name} resumed": "{name} retomou",
+  "{name} skipped to {time}": "{name} pulou para {time}",
+  "{name} skipped": "{name} pulou",
+  React: "Reagir",
+  Reactions: "Reações",
+  " · loading": " · carregando",
+  " · {n}s behind": " · {n} s atrás",
+  " · {n}s ahead": " · {n} s à frente",
+  "−{n}s": "−{n} s",
+  "+{n}s": "+{n} s",
 };
 
 export default coverage;

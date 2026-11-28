@@ -1,4 +1,23 @@
 const coverage: Record<string, string> = {
+  "{name} lost connection. Waiting for them to come back…":
+    "{name} 님의 연결이 끊겼습니다. 돌아오기를 기다리는 중…",
+  "When someone drops": "누군가 연결이 끊기면",
+  "Keep playing": "계속 재생",
+  "Always wait": "항상 기다리기",
+  "Everyone else carries on": "다른 사람은 계속 시청합니다",
+  "Pauses and waits in rooms of up to 3 people": "3명 이하의 방에서는 일시정지하고 기다립니다",
+  "Pauses and waits up to 2 minutes for them to rejoin":
+    "일시정지하고 최대 2분 동안 재접속을 기다립니다",
+  "Waiting for {names} to reconnect…": "{names} 님의 재연결을 기다리는 중…",
+  "Rejoin watch party": "함께 보기에 다시 참여",
+  Rejoin: "다시 참여",
+  "Update your relay to use this": "이 기능을 사용하려면 릴레이를 업데이트하세요",
+  "Waiting for {names} to load…": "{names} 님의 로딩을 기다리는 중…",
+  "Start when everyone is ready": "모두 준비되면 시작",
+  "Counts down, then plays for the room": "카운트다운 후 방 전체에 재생합니다",
+  "Starting in {n}… Cancel": "{n}초 후 시작… 취소",
+  "Starting together in {n}…": "{n}초 후 함께 시작…",
+  "Waiting for {name} to load…": "{name} 님의 로딩을 기다리는 중…",
   "Waiting for {name}…": "{name} 대기 중…",
   "Keeping the source you were watching.": "시청 중이던 소스를 유지합니다.",
   "Sound descriptions": "소리 설명",
@@ -711,6 +730,22 @@ const coverage: Record<string, string> = {
     "HDR 소스를 SDR로 변환합니다. 내장 재생 및 SDR 디스플레이에서 작동합니다.",
   "Uses mpv's native window and automatic Wayland color management (mpv 0.41 or newer recommended). Requires a compatible GPU driver, compositor and HDR-enabled display. X11 falls back to SDR. Restart playback to apply.":
     "mpv의 기본 창과 Wayland의 자동 색상 관리를 사용합니다(mpv 0.41 이상 권장). 호환되는 GPU 드라이버 및 컴포지터와 HDR이 활성화된 디스플레이가 필요합니다. X11에서는 SDR로 전환됩니다. 변경 사항을 적용하려면 재생을 다시 시작하세요.",
+  "Only I control playback": "재생은 나만 조작",
+  "Guests can't play, pause or skip": "게스트는 재생, 일시정지, 건너뛰기를 할 수 없습니다",
+  "{name} locked playback": "{name} 님이 재생을 잠갔습니다",
+  "{name} unlocked playback": "{name} 님이 재생 잠금을 해제했습니다",
+  "Only {name} can control playback": "{name} 님만 재생을 조작할 수 있습니다",
+  "{name} paused": "{name} 님이 일시정지했습니다",
+  "{name} resumed": "{name} 님이 다시 재생했습니다",
+  "{name} skipped to {time}": "{name} 님이 {time}(으)로 이동했습니다",
+  "{name} skipped": "{name} 님이 건너뛰었습니다",
+  React: "반응하기",
+  Reactions: "반응",
+  " · loading": " · 불러오는 중",
+  " · {n}s behind": " · {n}초 늦음",
+  " · {n}s ahead": " · {n}초 빠름",
+  "−{n}s": "−{n}초",
+  "+{n}s": "+{n}초",
 };
 
 export default coverage;
