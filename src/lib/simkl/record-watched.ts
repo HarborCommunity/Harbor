@@ -2,7 +2,7 @@ import { activeProfileId } from "@/lib/active-profile-id";
 import { getSession } from "./session";
 import { resolveForMeta } from "@/lib/tracker-resolve";
 import { resolveSimklEpisodeTarget, stremioIdToSimklTarget } from "./ids";
-import { addToHistory, markEpisodesWatched } from "./history";
+import { addToHistory, markAnimeEpisodesWatched, markEpisodesWatched } from "./history";
 import { animeIdentity, type ScrobbleInfo } from "./scrobble-body";
 import type { PlayerSrc } from "@/lib/view";
 import { notifyTrackerProgress } from "@/lib/tracker-progress-events";
@@ -37,7 +37,7 @@ export async function recordWatchedFallback(
   // match, not the row's umbrella IMDb show.
   const anime = animeIdentity(episode);
   if (anime?.number != null) {
-    if (await markEpisodesWatched({ [anime.scheme]: anime.id }, 1, [anime.number]))
+    if (await markAnimeEpisodesWatched({ [anime.scheme]: anime.id }, [anime.number]))
       return done(true);
   }
   // A failed verified native write must not become a guessed umbrella show
@@ -62,6 +62,6 @@ export async function recordWatchedFallback(
     );
   }
   if (t.kind === "anime-episode")
-    return done(await markEpisodesWatched(t.anime.ids, t.season, [t.number]));
+    return done(await markAnimeEpisodesWatched(t.anime.ids, [t.number]));
   return done(await addToHistory(t, metaId));
 }
