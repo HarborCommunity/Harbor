@@ -1,4 +1,10 @@
 const coverage: Record<string, string> = {
+  "Waiting for {names} to load…": "正在等待 {names} 加载…",
+  "Start when everyone is ready": "所有人准备好后开始",
+  "Counts down, then plays for the room": "倒计时后为整个房间播放",
+  "Starting in {n}… Cancel": "{n} 秒后开始…取消",
+  "Starting together in {n}…": "{n} 秒后一起开始…",
+  "Waiting for {name} to load…": "正在等待 {name} 加载…",
   "Waiting for {name}…": "正在等待 {name}…",
   "Keeping the source you were watching.": "保留你正在观看的来源。",
   "Sound descriptions": "声音描述",

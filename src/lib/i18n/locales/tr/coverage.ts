@@ -1,4 +1,10 @@
 const coverage: Record<string, string> = {
+  "Waiting for {names} to load…": "{names} yüklenene kadar bekleniyor…",
+  "Start when everyone is ready": "Herkes hazır olunca başlat",
+  "Counts down, then plays for the room": "Geri sayar, ardından oda için oynatır",
+  "Starting in {n}… Cancel": "{n} içinde başlıyor… İptal",
+  "Starting together in {n}…": "{n} saniye içinde birlikte başlıyor…",
+  "Waiting for {name} to load…": "{name} yüklenene kadar bekleniyor…",
   "Waiting for {name}…": "{name} bekleniyor…",
   "Keeping the source you were watching.": "İzlediğiniz kaynak korunuyor.",
   "Sound descriptions": "Ses açıklamaları",

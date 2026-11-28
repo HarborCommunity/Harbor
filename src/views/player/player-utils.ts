@@ -46,8 +46,16 @@ export function embedFlags(
   };
 }
 
-export function formatNames(names: string[]): string {
+/** "Sam", "Sam and Alex", "Sam, Alex and Kai" in the viewer's language. */
+export function formatNames(names: string[], language?: string): string {
   if (names.length === 0) return "";
+  if (language) {
+    try {
+      return new Intl.ListFormat(language, { style: "long", type: "conjunction" }).format(names);
+    } catch {
+      /* an unknown tag falls back to English */
+    }
+  }
   if (names.length === 1) return names[0];
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;

@@ -43,6 +43,7 @@ import {
   generateRoomCode,
   normalizeRoomCode,
   type ParticipantLocation,
+  type ParticipantSyncPhase,
   type PlayInvite,
   type RoomCommand,
   type SummonTarget,
@@ -103,6 +104,10 @@ type TogetherValue = {
   hostLocation: ParticipantLocation | null;
   suppressOutgoingFor: (ms: number) => void;
   onIncomingState: (cb: (state: SyncState) => void) => () => void;
+  /** Reports this viewer's watch-party sync phase to the room (relay v12+). */
+  sendStatus: (phase: ParticipantSyncPhase) => void;
+  /** The media key playing in this window, or null; see TogetherClient.setActivePlayback. */
+  setActivePlayback: (key: string | null) => void;
   modalOpen: boolean;
   modalOwner: string | null;
   openModal: (owner: string) => void;
@@ -191,7 +196,10 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
     started: false,
     relayVersion: null,
     lastError: null,
+    participantStatus: {},
+    hostAway: false,
   });
+  const activePlaybackRef = useRef<string | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [modalOwner, setModalOwner] = useState<string | null>(null);
   const modalOpen = modalOwner !== null;
@@ -231,6 +239,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       avatarRef.current,
       colorRef.current,
     );
+    c.setActivePlayback(activePlaybackRef.current);
     clientRef.current = c;
     const off = c.on((e: RoomEvent) =>
       applyRoomEvent(e, {
@@ -462,6 +471,15 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const sendStatus = useCallback((phase: ParticipantSyncPhase) => {
+    clientRef.current?.sendStatus(phase);
+  }, []);
+
+  const setActivePlayback = useCallback((key: string | null) => {
+    activePlaybackRef.current = key;
+    clientRef.current?.setActivePlayback(key);
+  }, []);
+
   const wasInvitedTo = useCallback((key: string): boolean => {
     const r = lastInviteRef.current;
     return !!r && r.key === key && Date.now() - r.at < 60_000;
@@ -509,6 +527,8 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       hostLocation,
       suppressOutgoingFor,
       onIncomingState,
+      sendStatus,
+      setActivePlayback,
       modalOpen,
       modalOwner,
       openModal,
@@ -559,6 +579,8 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       hostLocation,
       suppressOutgoingFor,
       onIncomingState,
+      sendStatus,
+      setActivePlayback,
       modalOpen,
       modalOwner,
       openModal,

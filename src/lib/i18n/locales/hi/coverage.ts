@@ -1,4 +1,10 @@
 const coverage: Record<string, string> = {
+  "Waiting for {names} to load…": "{names} के लोड होने का इंतज़ार…",
+  "Start when everyone is ready": "सबके तैयार होने पर शुरू करें",
+  "Counts down, then plays for the room": "उलटी गिनती के बाद रूम के लिए चलाता है",
+  "Starting in {n}… Cancel": "{n} में शुरू… रद्द करें",
+  "Starting together in {n}…": "{n} में साथ शुरू हो रहा है…",
+  "Waiting for {name} to load…": "{name} के लोड होने का इंतज़ार…",
   "Waiting for {name}…": "{name} की प्रतीक्षा की जा रही है…",
   "Keeping the source you were watching.": "वही स्रोत रखा जा रहा है जो आप देख रहे थे।",
   "Sound descriptions": "ध्वनि विवरण",

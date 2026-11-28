@@ -318,6 +318,8 @@ export type Settings = {
   togetherCfDeployed: boolean;
   togetherShareCursors: boolean;
   togetherGuestsPick: boolean;
+  /** Host's room starts by itself, after a short cancellable countdown, once everyone is ready. */
+  togetherAutoStart: boolean;
   togetherChatHistoryOpen: boolean;
   discordRichPresence: boolean;
   discordHideTitle: boolean;

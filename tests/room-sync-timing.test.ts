@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import ts from "typescript";
+import * as timeline from "../src/lib/together/timeline.ts";
 
-function harness(options: { cast?: boolean; started?: boolean } = {}) {
-  const now = 100_000;
+function harness(options: { cast?: boolean; started?: boolean; nudge?: boolean } = {}) {
+  let now = 100_000;
   const refs: any[] = [],
     effects: any[] = [];
   let refIndex = 0,
@@ -13,10 +14,11 @@ function harness(options: { cast?: boolean; started?: boolean } = {}) {
   const states = new Set<(state: any) => void>();
   const commands = new Set<(from: string, command: any) => void>();
   const calls: [string, number?][] = [];
+  const timers: { fn: () => void; at: number }[] = [];
   let position = 0,
     buffered = 20,
     castPlaying = false;
-  const bridge = {
+  const bridge: any = {
     seek: (n: number) => calls.push(["seek", n]),
     play: async () => {
       calls.push(["play"]);
@@ -26,6 +28,7 @@ function harness(options: { cast?: boolean; started?: boolean } = {}) {
     },
     setRate: (n: number) => calls.push(["rate", n]),
   };
+  if (options.nudge) bridge.setSyncRateFactor = (n: number) => calls.push(["factor", n]);
   const params: any = {
     inRoom: true,
     isHost: false,
@@ -35,7 +38,14 @@ function harness(options: { cast?: boolean; started?: boolean } = {}) {
     roomSnapshot: { room: "ABC123", started: true, syncState: null, hostClientId: "host" },
     clientId: "guest",
     src: { url: "fixture", meta: { id: "tt100" }, episode: { season: 1, episode: 1 } },
-    snap: { status: "playing", rate: 1, durationSec: 5000, videoWidth: 1280, videoHeight: 720 },
+    snap: {
+      status: "playing",
+      buffering: false,
+      rate: 1,
+      durationSec: 5000,
+      videoWidth: 1280,
+      videoHeight: 720,
+    },
     bridgeRef: { current: bridge },
     hostSourceRef: { current: null },
     guestPickRef: { current: false },
@@ -70,8 +80,11 @@ function harness(options: { cast?: boolean; started?: boolean } = {}) {
         }
       : undefined,
   };
+  const sets: any[] = [];
+  const intervals: (() => void)[] = [];
   const mocks: Record<string, any> = {
     react: {
+      useState: (initial: any) => [initial, (v: any) => sets.push(v)],
       useRef: (current: any) => refs[refIndex++] ?? (refs[refIndex - 1] = { current }),
       useEffect: (fn: any, deps: any[]) => {
         const index = effectIndex++,
@@ -91,6 +104,16 @@ function harness(options: { cast?: boolean; started?: boolean } = {}) {
     "@/lib/player/playback-clock": {
       getPlaybackPosition: () => position,
       getPlaybackBuffered: () => buffered,
+    },
+    "@/lib/together/protocol": { RELAY_SYNC_STATUS_VERSION: 12 },
+    "@/lib/together/timeline": timeline,
+    "./use-room-host-sync": {
+      useRoomHostSync: () => ({
+        startTogether: () => {},
+        waitingFor: [],
+        skipWaiting: () => {},
+        countdownAt: null,
+      }),
     },
     "../player-utils": {
       HOST_HEARTBEAT_MS: 1000,
@@ -117,7 +140,14 @@ function harness(options: { cast?: boolean; started?: boolean } = {}) {
     },
     exports,
     { now: () => now },
-    { setInterval: () => 1, clearInterval: () => {}, clearTimeout: () => {} },
+    {
+      setInterval: (fn: () => void) => (intervals.push(fn), intervals.length),
+      clearInterval: (id: number) => {
+        intervals[id - 1] = () => {};
+      },
+      setTimeout: (fn: () => void, ms: number) => timers.push({ fn, at: now + ms }),
+      clearTimeout: () => {},
+    },
   );
   const render = () => {
     refIndex = effectIndex = 0;
@@ -138,6 +168,10 @@ function harness(options: { cast?: boolean; started?: boolean } = {}) {
   });
   return {
     params,
+    notices: () => sets.filter((v) => v && typeof v === "object" && "kind" in v),
+    tick: () => {
+      for (const fn of intervals) fn();
+    },
     calls,
     render,
     state,
@@ -153,6 +187,13 @@ function harness(options: { cast?: boolean; started?: boolean } = {}) {
     castPlaying: (v: boolean) => {
       castPlaying = v;
     },
+    advance: (ms: number) => {
+      now += ms;
+      const due = timers.filter((t) => t.at <= now);
+      timers.splice(0, timers.length, ...timers.filter((t) => t.at > now));
+      for (const timer of due) timer.fn();
+    },
+    now: () => now,
     clear: () => {
       calls.length = 0;
     },
@@ -277,7 +318,7 @@ test("leaving the room unregisters callbacks", () => {
 test("small drift is left alone but host rate changes still apply", () => {
   const h = harness();
   h.render();
-  h.position(104.6);
+  h.position(104.3);
   h.emit({ speed: 2 });
   assert.deepEqual(h.calls, [["rate", 2]]);
 });
@@ -327,4 +368,108 @@ test("catch-up does not repeatedly seek while the player is still buffering", ()
   h.emit({ positionSeconds: 100 });
   assert.equal(seek(h), undefined);
   assert.ok(h.calls.some((c) => c[0] === "play"));
+});
+
+test("a guest reports buffering after 1 s of stalling and ready once 2 s are buffered", () => {
+  const h = harness();
+  const sent: string[] = [];
+  h.params.roomSnapshot = { ...h.params.roomSnapshot, relayVersion: 12 };
+  h.params.sendStatus = (phase: string) => sent.push(phase);
+  h.render();
+  h.params.snap.buffering = true;
+  h.render();
+  h.tick();
+  h.advance(500);
+  h.tick();
+  assert.deepEqual(sent, [], "a short hiccup is not reported");
+  h.advance(600);
+  h.tick();
+  assert.deepEqual(sent, ["buffering"]);
+  h.params.snap.buffering = false;
+  h.render();
+  h.buffered(1);
+  h.tick();
+  assert.deepEqual(sent, ["buffering"], "1 s buffered is not enough to hold up again");
+  h.buffered(2.5);
+  h.tick();
+  assert.deepEqual(sent, ["buffering", "ready"]);
+});
+
+test("a buffering host stops guests once instead of replaying the same second", () => {
+  const h = harness();
+  h.render();
+  h.position(100.9);
+  // What a current host sends while it waits for data: a stopped timeline.
+  h.emit({ positionSeconds: 100, updatedAt: 100_000, playing: false, buffering: true });
+  assert.ok(h.calls.some((c) => c[0] === "pause"));
+  assert.deepEqual(h.notices().at(-1), { kind: "host-buffering" }, "the guest is told why");
+  assert.equal(seek(h), 100);
+  h.clear();
+  h.params.snap.status = "paused";
+  h.render();
+  h.position(100);
+  for (let i = 0; i < 3; i++) {
+    h.advance(1000);
+    h.emit({ positionSeconds: 100, updatedAt: h.now(), playing: false, buffering: true });
+  }
+  assert.deepEqual(h.calls, []);
+});
+
+test("an older host that repeats a frozen playing position is treated as buffering", () => {
+  const h = harness();
+  h.render();
+  h.position(100);
+  h.emit({ positionSeconds: 100, updatedAt: h.now() });
+  h.clear();
+  h.advance(1000);
+  h.position(101);
+  h.emit({ positionSeconds: 100, updatedAt: h.now() });
+  assert.ok(h.calls.some((c) => c[0] === "pause"));
+  assert.equal(seek(h), 100);
+});
+
+test("a host pause snaps guests to the paused frame and resume does not seek again", () => {
+  const h = harness();
+  h.render();
+  h.position(100.4);
+  h.emit({ positionSeconds: 100.2, playing: false, updatedAt: h.now() });
+  assert.equal(seek(h), 100.2);
+  h.clear();
+  h.params.snap.status = "paused";
+  h.render();
+  h.position(100.2);
+  h.advance(5000);
+  h.emit({ positionSeconds: 100.2, playing: true, updatedAt: h.now() });
+  assert.deepEqual(h.calls, [["play"]]);
+});
+
+test("small gaps nudge the speed when the player supports it instead of seeking", () => {
+  const h = harness({ nudge: true });
+  h.render();
+  h.position(101.5);
+  h.emit({ positionSeconds: 100, updatedAt: h.now() - 2000 });
+  assert.equal(seek(h), undefined);
+  const factor = h.calls.find((c) => c[0] === "factor")?.[1];
+  assert.ok(factor !== undefined && factor > 1 && factor <= 1.05);
+});
+
+test("a scheduled start holds guests and plays exactly at playAt", () => {
+  const h = harness();
+  h.render();
+  h.position(100);
+  h.emit({ positionSeconds: 100, updatedAt: h.now(), playAt: h.now() + 1500 });
+  assert.ok(h.calls.some((c) => c[0] === "pause"));
+  assert.ok(!h.calls.some((c) => c[0] === "play"));
+  h.advance(1400);
+  assert.ok(!h.calls.some((c) => c[0] === "play"));
+  h.advance(100);
+  assert.ok(h.calls.some((c) => c[0] === "play"));
+});
+
+test("guests ignore host states until the room has started", () => {
+  const h = harness();
+  h.params.roomSnapshot = { ...h.params.roomSnapshot, started: false };
+  h.render();
+  h.emit({ playing: false });
+  assert.ok(!h.calls.some((c) => c[0] === "seek"));
 });

@@ -3,6 +3,7 @@ import {
   WT_PROTO,
   type ClientMessage,
   type Participant,
+  type ParticipantSyncPhase,
   type ParticipantLocation,
   type PlayInvite,
   type RoomCode,
@@ -18,12 +19,27 @@ export type { ClientState, RoomEvent, RoomSnapshot } from "./client-types";
 const AVATAR_MAX_CHARS = 590_000;
 const PING_INTERVAL_MS = 25_000;
 const LIVENESS_TIMEOUT_MS = 40_000;
+// While a watch party is playing, a dead connection must be noticed quickly.
+const PLAYBACK_PING_INTERVAL_MS = 5_000;
+const PLAYBACK_LIVENESS_TIMEOUT_MS = 12_000;
+// Ignore a host's sample time that disagrees wildly with when it arrived.
+const MAX_SAMPLE_SKEW_MS = 10_000;
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
 const MAX_RENAME_ATTEMPTS = 8;
 const RENAME_RECONNECT_MS = 60;
 const CONNECT_TIMEOUT_MS = 10_000;
 const MAX_FAIL_STREAK = 4;
+/** A play, pause or seek queued while offline is dropped once older than this. */
+const PENDING_COMMAND_MAX_AGE_MS = 5_000;
+
+/** The key a player and an invite share for "this title, this episode". */
+export function playbackKey(
+  mediaId: string,
+  episode: { season: number; episode: number } | null | undefined,
+): string {
+  return `${mediaId}|${episode?.season ?? ""}|${episode?.episode ?? ""}`;
+}
 
 function capAvatar(avatar: string | null): string | null {
   return avatar && avatar.length > AVATAR_MAX_CHARS ? null : avatar;
@@ -53,7 +69,12 @@ export class TogetherClient {
   private reconnectAttempt = 0;
   private intentional = false;
   private suppressUntil = 0;
+  private suppressedState: SyncState | null = null;
+  private suppressTimer: number | null = null;
   private outQueue: ClientMessage[] = [];
+  private pendingCommand: { command: RoomCommand; at: number } | null = null;
+  private activePlaybackKey: string | null = null;
+  private playbackActive = false;
   private lastSentInvite: PlayInvite | null = null;
   private claimedHost = false;
 
@@ -94,6 +115,8 @@ export class TogetherClient {
       started: false,
       relayVersion: null,
       lastError: null,
+      participantStatus: {},
+      hostAway: false,
     };
   }
 
@@ -140,6 +163,46 @@ export class TogetherClient {
 
   suppressOutgoingFor(ms: number) {
     this.suppressUntil = Date.now() + ms;
+    if (this.suppressTimer != null) {
+      window.clearTimeout(this.suppressTimer);
+      this.suppressTimer = null;
+    }
+    if (ms <= 0) {
+      this.flushSuppressedState();
+      return;
+    }
+    if (this.suppressedState) {
+      this.suppressTimer = window.setTimeout(() => {
+        this.suppressTimer = null;
+        this.flushSuppressedState();
+      }, ms);
+    }
+  }
+
+  private flushSuppressedState() {
+    const state = this.suppressedState;
+    this.suppressedState = null;
+    if (state) this.publishState(state);
+  }
+
+  /**
+   * The media this client is playing right now, or null. An invite for media
+   * that is already playing must never pull the viewer out to the picker, and
+   * while something plays the connection is checked more often.
+   */
+  setActivePlayback(key: string | null) {
+    this.activePlaybackKey = key;
+    const active = key != null;
+    if (active === this.playbackActive) return;
+    this.playbackActive = active;
+    if (this.pingTimer != null) this.startPing();
+  }
+
+  private isActivePlayback(invite: PlayInvite): boolean {
+    return (
+      this.activePlaybackKey != null &&
+      this.activePlaybackKey === playbackKey(invite.mediaId, invite.episode)
+    );
   }
 
   join(room: RoomCode, listenJoin?: ListenJoin): void {
@@ -148,6 +211,7 @@ export class TogetherClient {
     }
     this.cleanup();
     this.outQueue = [];
+    this.pendingCommand = null;
     this.lastSentInvite = null;
     this.reconnectAttempt = 0;
     this.intentional = false;
@@ -166,6 +230,8 @@ export class TogetherClient {
       lastError: null,
       started: false,
       relayVersion: null,
+      participantStatus: {},
+      hostAway: false,
     });
     this.openSocket();
   }
@@ -180,7 +246,13 @@ export class TogetherClient {
     this.room = null;
     this.listenJoin = undefined;
     this.resume = undefined;
+    // A state held back by a recent sync belongs to this room, not the next one.
+    this.suppressedState = null;
+    if (this.suppressTimer != null) window.clearTimeout(this.suppressTimer);
+    this.suppressTimer = null;
+    this.suppressUntil = 0;
     this.outQueue = [];
+    this.pendingCommand = null;
     this.lastSentInvite = null;
     this.claimedHost = false;
     this.update({
@@ -193,6 +265,8 @@ export class TogetherClient {
       relayVersion: null,
       listenSessionId: undefined,
       lastError: null,
+      participantStatus: {},
+      hostAway: false,
     });
   }
 
@@ -277,15 +351,57 @@ export class TogetherClient {
 
   publishState(state: SyncState): void {
     if (!this.room) return;
-    if (Date.now() < this.suppressUntil) return;
-    this.send({ t: "state", room: this.room, clientId: this.clientId, state });
+    if (Date.now() < this.suppressUntil) {
+      // Keep the newest state instead of dropping it: a host's anchor must
+      // still reach the room once the suppression window ends.
+      this.suppressedState = state;
+      if (this.suppressTimer == null) {
+        this.suppressTimer = window.setTimeout(
+          () => {
+            this.suppressTimer = null;
+            this.flushSuppressedState();
+          },
+          Math.max(0, this.suppressUntil - Date.now()),
+        );
+      }
+      return;
+    }
+    this.send({
+      t: "state",
+      room: this.room,
+      clientId: this.clientId,
+      state: this.toRelayClock(state),
+    });
     this.update({ syncState: state });
   }
 
   sendCommand(command: RoomCommand): void {
     if (!this.room) return;
-    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      // Only the newest request matters; it is sent if the room is back soon.
+      this.pendingCommand = { command, at: Date.now() };
+      return;
+    }
     this.sendNow({ t: "cmd", room: this.room, clientId: this.clientId, command });
+  }
+
+  sendStatus(phase: ParticipantSyncPhase): void {
+    if (!this.room || this.ws?.readyState !== WebSocket.OPEN) return;
+    this.sendNow({ t: "status", room: this.room, clientId: this.clientId, phase });
+  }
+
+  /** Converts the app's local sample and start times to relay time for the wire. */
+  private toRelayClock(state: SyncState): SyncState {
+    if (state.sampledAt == null && state.playAt == null) return state;
+    const out = { ...state };
+    if (this.relayOffset == null) {
+      delete out.sampledAt;
+      delete out.playAt;
+      return out;
+    }
+    if (out.sampledAt != null) out.sampledAt += this.relayOffset;
+    if (out.playAt != null) out.playAt += this.relayOffset;
+    return out;
   }
 
   sendChat(text: string): void {
@@ -481,6 +597,8 @@ export class TogetherClient {
         this.attemptResolved = true;
         this.failStreak = 0;
         this.clearWatchdog();
+        if (typeof msg.srvAt === "number" && this.relayOffset == null)
+          this.relayOffset = msg.srvAt - Date.now();
         if (msg.state) this.localizeStateClock(msg.state, msg.srvAt, msg.observedAt);
         this.clearListenQueue();
         this.queueRevision = msg.queue?.revision ?? 0;
@@ -499,13 +617,20 @@ export class TogetherClient {
           hostClientId: msg.hostClientId,
           started: msg.started ?? false,
           relayVersion: typeof msg.relayVersion === "number" ? msg.relayVersion : null,
+          participantStatus: { ...msg.statuses },
+          hostAway: msg.hostAway === true,
         });
         this.reconcileHostClaim(msg.hostClientId);
         if (msg.state) {
           this.emit({ kind: "incoming-state", state: msg.state });
           const stateAuthorPresent =
             !!msg.state.updatedBy && msg.participants.some((p) => p.id === msg.state!.updatedBy);
-          if (msg.state.mediaId && msg.state.updatedBy !== this.clientId && stateAuthorPresent) {
+          if (
+            msg.state.mediaId &&
+            msg.state.updatedBy !== this.clientId &&
+            stateAuthorPresent &&
+            this.activePlaybackKey !== playbackKey(msg.state.mediaId, msg.state.episode)
+          ) {
             const hostName =
               msg.participants.find((p) => p.id === msg.state!.updatedBy)?.name ?? "Host";
             this.emit({
@@ -527,7 +652,7 @@ export class TogetherClient {
         }
         return;
       case "host":
-        this.update({ hostClientId: msg.hostClientId });
+        this.update({ hostClientId: msg.hostClientId, hostAway: false });
         this.reconcileHostClaim(msg.hostClientId);
         return;
       case "started":
@@ -549,7 +674,15 @@ export class TogetherClient {
         ) {
           return;
         }
-        this.update({ participants: nextParticipants });
+        // A (re)joining connection has reported nothing yet; a stale "buffering"
+        // from a crashed connection must not keep the room waiting.
+        const participantStatus = { ...this.snapshot.participantStatus };
+        delete participantStatus[incoming.id];
+        this.update({
+          participants: nextParticipants,
+          participantStatus,
+          ...(incoming.id === this.snapshot.hostClientId && { hostAway: false }),
+        });
         if (incoming.id !== this.clientId && this.room && this.ws?.readyState === WebSocket.OPEN) {
           this.sendNow({
             t: "profile",
@@ -586,11 +719,23 @@ export class TogetherClient {
           avatar: left?.avatar ?? null,
           color: left?.color ?? null,
         });
+        const participantStatus = { ...this.snapshot.participantStatus };
+        delete participantStatus[msg.clientId];
         this.update({
           participants: this.snapshot.participants.filter((p) => p.id !== msg.clientId),
+          participantStatus,
         });
         return;
       }
+      case "participant-status":
+        if (msg.phase !== "ready" && msg.phase !== "buffering") return;
+        this.update({
+          participantStatus: { ...this.snapshot.participantStatus, [msg.clientId]: msg.phase },
+        });
+        return;
+      case "host-away":
+        if (msg.clientId === this.snapshot.hostClientId) this.update({ hostAway: true });
+        return;
       case "participant-ready":
         this.update({
           participants: this.snapshot.participants.map((p) =>
@@ -625,6 +770,9 @@ export class TogetherClient {
         return;
       case "invite":
         if (msg.from === this.clientId) return;
+        // Hosts re-send their invite on reconnect and whenever someone joins;
+        // a viewer already playing that media must stay in the player.
+        if (this.isActivePlayback(msg.invite)) return;
         this.emit({
           kind: "invite",
           from: msg.from,
@@ -773,6 +921,16 @@ export class TogetherClient {
     const queue = this.outQueue;
     this.outQueue = [];
     for (const m of queue) this.sendNow(m);
+    const pending = this.pendingCommand;
+    this.pendingCommand = null;
+    // After a long outage the room has moved on; an old seek would drag everyone back.
+    if (pending && this.room && Date.now() - pending.at <= PENDING_COMMAND_MAX_AGE_MS)
+      this.sendNow({
+        t: "cmd",
+        room: this.room,
+        clientId: this.clientId,
+        command: pending.command,
+      });
   }
 
   private handleNameCollision(participants: Participant[]): boolean {
@@ -808,17 +966,21 @@ export class TogetherClient {
 
   private startPing() {
     this.stopPing();
-    this.pingTimer = window.setInterval(() => {
-      if (this.lastInboundAt && Date.now() - this.lastInboundAt > LIVENESS_TIMEOUT_MS) {
-        try {
-          this.ws?.close();
-        } catch {
-          /* ignore */
+    const liveness = this.playbackActive ? PLAYBACK_LIVENESS_TIMEOUT_MS : LIVENESS_TIMEOUT_MS;
+    this.pingTimer = window.setInterval(
+      () => {
+        if (this.lastInboundAt && Date.now() - this.lastInboundAt > liveness) {
+          try {
+            this.ws?.close();
+          } catch {
+            /* ignore */
+          }
+          return;
         }
-        return;
-      }
-      this.sendPing();
-    }, PING_INTERVAL_MS);
+        this.sendPing();
+      },
+      this.playbackActive ? PLAYBACK_PING_INTERVAL_MS : PING_INTERVAL_MS,
+    );
   }
 
   private recordPong(srvAt: number | undefined) {
@@ -836,10 +998,27 @@ export class TogetherClient {
   }
 
   private localizeStateClock(state: SyncState, srvAt: number | undefined, observedAt?: number) {
-    if (typeof srvAt !== "number") return;
+    if (typeof srvAt !== "number") {
+      delete state.sampledAt;
+      delete state.playAt;
+      return;
+    }
     if (this.relayOffset == null) this.relayOffset = srvAt - Date.now();
+    const offset = this.relayOffset;
     state.updatedAt =
-      (typeof observedAt === "number" ? Math.min(srvAt, observedAt) : srvAt) - this.relayOffset;
+      (typeof observedAt === "number" ? Math.min(srvAt, observedAt) : srvAt) - offset;
+    if (typeof state.sampledAt === "number" && Number.isFinite(state.sampledAt)) {
+      state.sampledAt -= offset;
+      // The host sampled before the relay received it; a later or far earlier
+      // sample means one of the clocks is unreliable, so use the relay's time.
+      if (
+        state.sampledAt > state.updatedAt + 1000 ||
+        state.updatedAt - state.sampledAt > MAX_SAMPLE_SKEW_MS
+      )
+        delete state.sampledAt;
+    } else delete state.sampledAt;
+    if (typeof state.playAt === "number" && Number.isFinite(state.playAt)) state.playAt -= offset;
+    else delete state.playAt;
   }
 
   private resetClockState() {

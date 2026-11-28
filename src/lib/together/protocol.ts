@@ -42,10 +42,21 @@ export type SyncState = {
   speed?: number;
   source?: SourceDescriptor;
   guestPick?: boolean;
+  /** The host is waiting for data; the timeline is stopped. Sent by newer hosts. */
+  buffering?: boolean;
+  /** When the host read positionSeconds (relay ms on the wire, local ms in the app). */
+  sampledAt?: number;
+  /** Playback starts at this instant (relay ms on the wire, local ms in the app). */
+  playAt?: number;
   updatedAt: number;
   updatedBy: string;
   hostClientId: string | null;
 };
+
+/** Relay version that understands participant status and host grace periods. */
+export const RELAY_SYNC_STATUS_VERSION = 12;
+
+export type ParticipantSyncPhase = "ready" | "buffering";
 
 export type RoomCommand =
   | { action: "play" }
@@ -176,6 +187,7 @@ export type ClientMessage =
       activeAt: number;
       location?: ParticipantLocation;
     }
+  | { t: "status"; room: RoomCode; clientId: string; phase: ParticipantSyncPhase }
   | { t: "ping"; room: RoomCode; clientId: string };
 
 export type ServerMessage =
@@ -196,7 +208,11 @@ export type ServerMessage =
       started?: boolean;
       srvAt?: number;
       relayVersion?: number;
+      statuses?: Record<string, ParticipantSyncPhase>;
+      hostAway?: boolean;
     }
+  | { t: "participant-status"; clientId: string; phase: ParticipantSyncPhase }
+  | { t: "host-away"; clientId: string }
   | { t: "participant-joined"; participant: Participant }
   | { t: "participant-left"; clientId: string; name?: string }
   | { t: "started"; started: boolean }
