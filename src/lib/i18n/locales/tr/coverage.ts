@@ -1,4 +1,6 @@
 const coverage: Record<string, string> = {
+  "Starting together in {n}…": "{n} saniye içinde birlikte başlıyor…",
+  "Waiting for {name} to load…": "{name} yüklenene kadar bekleniyor…",
   "Waiting for {name}…": "{name} bekleniyor…",
   "Keeping the source you were watching.": "İzlediğiniz kaynak korunuyor.",
   "Sound descriptions": "Ses açıklamaları",

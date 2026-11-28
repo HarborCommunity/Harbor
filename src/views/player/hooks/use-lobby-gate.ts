@@ -16,6 +16,8 @@ export function useLobbyGate(params: {
   setHasStarted: (v: boolean) => void;
   roomSnapshot: RoomSnapshot;
   startRoom: () => void;
+  /** Starts the host's playback together with the room (synchronized countdown). */
+  startTogether: () => void;
   suppressOutgoingFor: (ms: number) => void;
   bridgeRef: RefObject<PlayerBridge | null>;
   initialSyncDoneRef: RefObject<boolean>;
@@ -33,6 +35,7 @@ export function useLobbyGate(params: {
     setHasStarted,
     roomSnapshot,
     startRoom,
+    startTogether,
     suppressOutgoingFor,
     bridgeRef,
     initialSyncDoneRef,
@@ -41,10 +44,11 @@ export function useLobbyGate(params: {
 
   const startHost = useCallback(() => {
     setHasStarted(true);
-    startRoom();
     suppressOutgoingFor(0);
-    bridgeRef.current?.play({ reason: "together" }).catch(() => {});
-  }, [setHasStarted, startRoom, suppressOutgoingFor, bridgeRef]);
+    // The timed start goes out before "started", so guests see it when they leave the lobby.
+    startTogether();
+    startRoom();
+  }, [setHasStarted, startRoom, startTogether, suppressOutgoingFor]);
 
   useEffect(() => {
     if (!inRoom || !isHost || !hasStarted || roomSnapshot.started) return;

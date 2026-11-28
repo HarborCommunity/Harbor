@@ -7,6 +7,7 @@ import type { ChatMessage } from "@/lib/together/provider";
 import type { ParticipantLocation, SourceDescriptor, SyncState } from "@/lib/together/protocol";
 import { DurationMismatchChip } from "./duration-mismatch-chip";
 import { ForeignNoticeBox } from "./foreign-notice-box";
+import { RoomSyncPill, type RoomSyncPillNotice } from "./room-sync-pill";
 import { WaitingForRoom } from "./waiting-for-room";
 
 export const RoomLayer = memo(function RoomLayer({
@@ -43,6 +44,7 @@ export const RoomLayer = memo(function RoomLayer({
   onFindCloser,
   foreignNotice,
   onDismissForeign,
+  syncNotice,
 }: {
   inRoom: boolean;
   pipMode: boolean;
@@ -77,6 +79,7 @@ export const RoomLayer = memo(function RoomLayer({
   onFindCloser: () => void;
   foreignNotice: { title: string | null; from: string } | null;
   onDismissForeign: () => void;
+  syncNotice: RoomSyncPillNotice | null;
 }) {
   const everyoneReady = useMemo(
     () => participants.length > 0 && participants.every((p) => p.ready),
@@ -126,6 +129,8 @@ export const RoomLayer = memo(function RoomLayer({
           onLeave={onLeave}
         />
       )}
+
+      {inRoom && !showWaiting && !pipMode && syncNotice && <RoomSyncPill notice={syncNotice} />}
 
       {!pipMode && !drawMode && (
         <DurationMismatchChip

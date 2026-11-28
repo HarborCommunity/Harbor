@@ -103,6 +103,8 @@ type TogetherValue = {
   hostLocation: ParticipantLocation | null;
   suppressOutgoingFor: (ms: number) => void;
   onIncomingState: (cb: (state: SyncState) => void) => () => void;
+  /** The media key playing in this window, or null; see TogetherClient.setActivePlayback. */
+  setActivePlayback: (key: string | null) => void;
   modalOpen: boolean;
   modalOwner: string | null;
   openModal: (owner: string) => void;
@@ -192,6 +194,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
     relayVersion: null,
     lastError: null,
   });
+  const activePlaybackRef = useRef<string | null>(null);
   const [chat, setChat] = useState<ChatMessage[]>([]);
   const [modalOwner, setModalOwner] = useState<string | null>(null);
   const modalOpen = modalOwner !== null;
@@ -231,6 +234,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       avatarRef.current,
       colorRef.current,
     );
+    c.setActivePlayback(activePlaybackRef.current);
     clientRef.current = c;
     const off = c.on((e: RoomEvent) =>
       applyRoomEvent(e, {
@@ -462,6 +466,11 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const setActivePlayback = useCallback((key: string | null) => {
+    activePlaybackRef.current = key;
+    clientRef.current?.setActivePlayback(key);
+  }, []);
+
   const wasInvitedTo = useCallback((key: string): boolean => {
     const r = lastInviteRef.current;
     return !!r && r.key === key && Date.now() - r.at < 60_000;
@@ -509,6 +518,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       hostLocation,
       suppressOutgoingFor,
       onIncomingState,
+      setActivePlayback,
       modalOpen,
       modalOwner,
       openModal,
@@ -559,6 +569,7 @@ export function TogetherProvider({ children }: { children: ReactNode }) {
       hostLocation,
       suppressOutgoingFor,
       onIncomingState,
+      setActivePlayback,
       modalOpen,
       modalOwner,
       openModal,
